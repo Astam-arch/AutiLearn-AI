@@ -1,6 +1,12 @@
 <?php
 // student/dashboard.php
 
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
@@ -15,7 +21,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // Redirect non-student roles to their appropriate dashboard
 if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
-    $role = $_SESSION['role'];
+    $role = htmlspecialchars($_SESSION['role'], ENT_QUOTES, 'UTF-8');
     $dashboardUrl = defined('BASE_URL')
         ? BASE_URL . "{$role}/dashboard.php"
         : "../{$role}/dashboard.php";
@@ -25,7 +31,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
 }
 
 $studentName = $_SESSION['full_name'] ?? 'Learner';
-$studentId   = $_SESSION['user_id'];
+$studentId   = (int)($_SESSION['user_id'] ?? 0);
 
 // =====================================================
 // 2. FETCH OR DEFAULT GAMIFICATION STATS
@@ -35,29 +41,28 @@ $streakDays = 5;
 $completedActivities = 3;
 $totalActivities = 6;
 
-try {
-    $stmt = $pdo->prepare(
-        "SELECT stars_earned, streak_days FROM users WHERE id = ?"
-    );
+if (isset($pdo) && $pdo instanceof PDO) {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT stars_earned, streak_days FROM users WHERE id = ? LIMIT 1"
+        );
+        $stmt->execute([$studentId]);
+        $userStats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    $stmt->execute([$studentId]);
-    $userStats = $stmt->fetch();
-
-    if ($userStats) {
-        $starsEarned = $userStats['stars_earned'] ?? $starsEarned;
-        $streakDays = $userStats['streak_days'] ?? $streakDays;
+        if ($userStats) {
+            $starsEarned = isset($userStats['stars_earned']) ? (int)$userStats['stars_earned'] : $starsEarned;
+            $streakDays = isset($userStats['streak_days']) ? (int)$userStats['streak_days'] : $streakDays;
+        }
+    } catch (PDOException $e) {
+        // Soft fallback to defaults
     }
-} catch (PDOException $e) {
-    // Soft fallback to defaults
 }
 
-$progressPercentage = round(
-    ($completedActivities / $totalActivities) * 100
-);
+$safeTotalActivities = ($totalActivities > 0) ? $totalActivities : 1;
+$progressPercentage = min(100, max(0, round(($completedActivities / $safeTotalActivities) * 100)));
 
-$logoutUrl = defined('BASE_URL')
-    ? BASE_URL . 'logout.php'
-    : '../logout.php';
+$logoutUrl = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
+$siteName  = defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI';
 ?>
 
 <!DOCTYPE html>
@@ -66,157 +71,89 @@ $logoutUrl = defined('BASE_URL')
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        Student Dashboard |
-        <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?>
-    </title>
+    <title>Student Dashboard | <?php echo htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8'); ?></title>
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --bg-gradient: radial-gradient(circle at 10% 20%, rgb(238, 242, 255) 0%, rgb(245, 243, 255) 90%);
-            --card-radius: 30px;
+            --bg-body: #f4f7fc;
+            --card-bg: #ffffff;
+            --card-radius: 24px;
+            --text-main: #0f172a;
+            --text-muted: #334155; /* Darker, high contrast */
             --primary-blue: #4f46e5;
-            --soft-purple: #8b5cf6;
-            --gentle-teal: #0d9488;
-            --warm-amber: #f59e0b;
-            --transition-smooth: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         body {
-            background: var(--bg-gradient);
+            background-color: var(--bg-body);
             font-family: 'Poppins', sans-serif;
-            color: #1e293b;
+            color: var(--text-main);
             min-height: 100vh;
-            padding-bottom: 90px;
-            overflow-x: hidden;
-            position: relative;
+            padding-bottom: 80px;
         }
 
-        /* =========================================
-            BACKGROUND AMBIENT BLOBS
-        ========================================= */
-        .ambient-blob {
-            position: absolute;
-            width: 400px;
-            height: 400px;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
-            filter: blur(80px);
-            border-radius: 50%;
-            z-index: -1;
-            animation: blobFloat 10s ease-in-out infinite alternate;
-        }
-        .blob-1 { top: -100px; left: -100px; }
-        .blob-2 { bottom: 10%; right: -100px; animation-delay: 5s; }
-
-        @keyframes blobFloat {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(30px, 50px) scale(1.1); }
-        }
-
-        h1, h2, h3, h4, .brand-font {
+        h1, h2, h3, h4, h5, .brand-font {
             font-family: 'Fredoka', cursive, sans-serif;
         }
-
-        /* =========================================
-            ANIMATIONS & STAGGER EFFECTS
-        ========================================= */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes bounceGentle {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-6px); }
-        }
-
-        .animate-fade-in {
-            animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        .delay-1 { animation-delay: 0.1s; opacity: 0; }
-        .delay-2 { animation-delay: 0.2s; opacity: 0; }
-        .delay-3 { animation-delay: 0.3s; opacity: 0; }
 
         /* =========================================
             NAVBAR
         ========================================= */
         .navbar-student {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-            padding: 16px 0;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 14px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         }
 
         .brand-icon-box {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #4f46e5, #8b5cf6);
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
             color: #fff;
-            border-radius: 14px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
-            transition: transform 0.3s ease;
-        }
-        .brand-icon-box:hover {
-            transform: rotate(10deg) scale(1.05);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
         }
 
         /* =========================================
-            STAT BADGES (GAMIFIED)
+            STAT BADGES
         ========================================= */
         .stat-badge {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border-radius: 22px;
-            padding: 16px 24px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-            display: inline-flex;
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px 22px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+            display: flex;
             align-items: center;
             gap: 16px;
-            font-weight: 600;
-            border: 2px solid rgba(255, 255, 255, 0.8);
+            border: 1px solid #e2e8f0;
             transition: var(--transition-smooth);
-            animation: bounceGentle 4s ease-in-out infinite;
         }
 
         .stat-badge:hover {
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 15px 35px rgba(79, 70, 229, 0.08);
-            border-color: #c7d2fe;
-        }
-
-        .stat-badge:nth-child(2) {
-            animation-delay: 2s;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.08);
+            border-color: #cbd5e1;
         }
 
         /* =========================================
-            ACTIVITY CARDS (GLASSMORPHIC & HOVER)
+            ACTIVITY CARDS (ENHANCED DESIGN)
         ========================================= */
         .activity-card {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: var(--card-bg);
             border-radius: var(--card-radius);
-            padding: 32px;
-            border: 2px solid rgba(255, 255, 255, 0.8);
+            padding: 32px 28px;
+            border: 1px solid #e2e8f0;
             transition: var(--transition-smooth);
             height: 100%;
             text-decoration: none;
@@ -224,7 +161,7 @@ $logoutUrl = defined('BASE_URL')
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.03);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
             position: relative;
             overflow: hidden;
         }
@@ -232,140 +169,116 @@ $logoutUrl = defined('BASE_URL')
         .activity-card::before {
             content: '';
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(135deg, rgba(255,255,255,0.4), transparent);
-            opacity: 0;
-            transition: opacity 0.4s ease;
-            pointer-events: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: transparent;
+            transition: var(--transition-smooth);
         }
 
         .activity-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 25px 50px rgba(79, 70, 229, 0.12);
+            transform: translateY(-8px);
+            box-shadow: 0 16px 35px rgba(79, 70, 229, 0.12);
+            border-color: #cbd5e1;
             color: inherit;
-            border-color: rgba(255, 255, 255, 1);
         }
 
-        .activity-card:hover::before {
-            opacity: 1;
-        }
-
-        /* Card theme variants */
-        .card-pecs { border-bottom: 6px solid #4f46e5; }
-        .card-speech { border-bottom: 6px solid #10b981; }
-        .card-grammar { border-bottom: 6px solid #0d9488; }
-        .card-games { border-bottom: 6px solid #f97316; }
-        .card-calm { border-bottom: 6px solid #f59e0b; }
+        /* Accent top borders for cards */
+        .card-pecs::before { background: #4f46e5; }
+        .card-speech::before { background: #059669; }
+        .card-grammar::before { background: #0d9488; }
+        .card-games::before { background: #ea580c; }
+        .card-calm::before { background: #ca8a04; }
 
         /* =========================================
-            ICON CIRCLES
+            ICON BOXES
         ========================================= */
         .icon-circle {
-            width: 75px;
-            height: 75px;
-            border-radius: 24px;
+            width: 72px;
+            height: 72px;
+            border-radius: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2.1rem;
-            margin-bottom: 24px;
-            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.03);
+            font-size: 2rem;
+            margin-bottom: 22px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
 
-        .activity-card:hover .icon-circle {
-            transform: scale(1.12) rotate(8deg);
+        /* Card Text High Visibility Fix */
+        .activity-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+
+        .activity-desc {
+            font-size: 0.98rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 0;
+            font-weight: 500;
         }
 
         /* =========================================
             PROGRESS BAR
         ========================================= */
         .progress-container-card {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(12px);
+            background: var(--card-bg);
             border-radius: var(--card-radius);
-            padding: 30px;
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.03);
+            padding: 24px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
         }
 
         .progress-pill {
-            height: 16px;
+            height: 14px;
             border-radius: 20px;
-            background-color: #f1f5f9;
+            background-color: #e2e8f0;
             overflow: hidden;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
             padding: 2px;
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #4f46e5, #8b5cf6, #ec4899);
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
             border-radius: 20px;
-            background-size: 200% 100%;
-            animation: gradientShift 4s ease infinite;
-            transition: width 1.5s cubic-bezier(0.1, 1, 0.1, 1);
-            position: relative;
-        }
-
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            transition: width 1s ease-in-out;
         }
 
         /* =========================================
             SUPPORT ALERT BANNER
         ========================================= */
         .alert-support {
-            background: linear-gradient(135deg, rgba(13, 148, 136, 0.08), rgba(20, 184, 166, 0.03));
-            border: 1px solid rgba(13, 148, 136, 0.2);
-            border-radius: 24px;
-            padding: 20px 26px;
-            color: #0f766e;
-            backdrop-filter: blur(10px);
-        }
-
-        /* Arrow animation inside card footers */
-        .activity-card .fa-circle-arrow-right {
-            transition: transform 0.3s ease;
-        }
-        .activity-card:hover .fa-circle-arrow-right {
-            transform: translateX(6px);
-        }
-
-        /* =========================================
-            RESPONSIVE ADJUSTMENTS
-        ========================================= */
-        @media (max-width: 576px) {
-            .activity-card { padding: 24px; }
-            .display-4 { font-size: 2.2rem; }
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 16px;
+            padding: 18px 22px;
+            color: #166534;
         }
     </style>
 </head>
 
 <body>
 
-<!-- Decorative Background Ambient Blobs -->
-<div class="ambient-blob blob-1"></div>
-<div class="ambient-blob blob-2"></div>
-
 <!-- =====================================================
     STUDENT NAVIGATION
 ===================================================== -->
 <nav class="navbar navbar-student sticky-top">
     <div class="container">
-        <a class="navbar-brand brand-font fs-3 text-dark d-flex align-items-center gap-3 text-decoration-none" href="dashboard.php">
+        <a class="navbar-brand brand-font fs-4 text-dark d-flex align-items-center gap-3 text-decoration-none" href="dashboard.php">
             <div class="brand-icon-box">
-                <i class="fa-solid fa-brain fs-4"></i>
+                <i class="fa-solid fa-brain fs-5"></i>
             </div>
             <span>Auti<span class="text-primary">Learn</span></span>
         </a>
         <div class="d-flex align-items-center gap-3">
             <span class="d-none d-md-inline fw-medium text-secondary">
-                Hello, 👋 <strong class="text-dark fw-semibold"><?php echo htmlspecialchars($studentName); ?></strong>
+                Hello, 👋 <strong class="text-dark fw-semibold"><?php echo htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8'); ?></strong>
             </span>
-            <a href="<?php echo htmlspecialchars($logoutUrl); ?>" class="btn btn-outline-danger rounded-pill px-4 fw-semibold shadow-sm transition-all" style="border-radius: 50px;">
+            <a href="<?php echo htmlspecialchars($logoutUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-semibold shadow-sm">
                 <i class="fa-solid fa-right-from-bracket me-1"></i> Exit
             </a>
         </div>
@@ -377,15 +290,15 @@ $logoutUrl = defined('BASE_URL')
 ===================================================== -->
 <div class="container mt-4">
 
-    <div class="row align-items-center g-4 mb-4 animate-fade-in">
+    <div class="row align-items-center g-4 mb-4">
         <div class="col-lg-7">
-            <span class="badge bg-indigo-subtle text-indigo rounded-pill px-3.5 py-2 mb-3 fw-semibold fs-6" style="background-color: #ede9fe; color: #4f46e5;">
+            <span class="badge bg-indigo-subtle text-indigo rounded-pill px-3 py-2 mb-3 fw-semibold" style="background-color: #ede9fe; color: #4f46e5;">
                 <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i> Ready to learn & play today?
             </span>
-            <h1 class="display-4 fw-bold text-dark mb-2" style="letter-spacing: -0.5px;">
-                Welcome Back, <?php echo htmlspecialchars($studentName); ?>! 🌟
+            <h1 class="display-5 fw-bold text-dark mb-2">
+                Welcome Back, <?php echo htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8'); ?>! 🌟
             </h1>
-            <p class="text-secondary fs-5" style="max-width: 550px;">
+            <p class="text-secondary fs-6 mb-0" style="max-width: 550px;">
                 Pick an activity, practice speech with friendly real-time guidance, or play interactive learning games.
             </p>
         </div>
@@ -395,11 +308,11 @@ $logoutUrl = defined('BASE_URL')
                 <!-- STARS -->
                 <div class="stat-badge">
                     <div class="fs-2 text-warning">
-                        <i class="fa-solid fa-star fa-beat" style="--fa-animation-duration: 2.5s;"></i>
+                        <i class="fa-solid fa-star"></i>
                     </div>
                     <div>
-                        <div class="fs-3 fw-bold text-dark mb-0"><?php echo (int)$starsEarned; ?></div>
-                        <small class="text-muted fw-medium">Stars Earned</small>
+                        <div class="fs-4 fw-bold text-dark mb-0"><?php echo (int)$starsEarned; ?></div>
+                        <small class="text-muted fw-semibold">Stars Earned</small>
                     </div>
                 </div>
 
@@ -409,8 +322,8 @@ $logoutUrl = defined('BASE_URL')
                         <i class="fa-solid fa-fire"></i>
                     </div>
                     <div>
-                        <div class="fs-3 fw-bold text-dark mb-0"><?php echo (int)$streakDays; ?> Days</div>
-                        <small class="text-muted fw-medium">Daily Streak</small>
+                        <div class="fs-4 fw-bold text-dark mb-0"><?php echo (int)$streakDays; ?> Days</div>
+                        <small class="text-muted fw-semibold">Daily Streak</small>
                     </div>
                 </div>
             </div>
@@ -420,8 +333,8 @@ $logoutUrl = defined('BASE_URL')
     <!-- =================================================
          SUPPORT NOTICE
     ================================================== -->
-    <div class="alert-support d-flex align-items-center gap-3 mb-4 shadow-sm animate-fade-in delay-1">
-        <i class="fa-solid fa-circle-info fs-3 text-teal" style="color: #0d9488;"></i>
+    <div class="alert-support d-flex align-items-center gap-3 mb-4 shadow-sm">
+        <i class="fa-solid fa-circle-info fs-3 text-success"></i>
         <div>
             <h6 class="fw-bold mb-1">Friendly Pronunciation & Grammar Support Active</h6>
             <p class="mb-0 small text-secondary">
@@ -433,13 +346,13 @@ $logoutUrl = defined('BASE_URL')
     <!-- =================================================
          DAILY PROGRESS BAR
     ================================================== -->
-    <div class="progress-container-card mb-5 animate-fade-in delay-2">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="fw-bold fs-5 text-dark d-flex align-items-center gap-2">
+    <div class="progress-container-card mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold fs-6 text-dark d-flex align-items-center gap-2">
                 <i class="fa-solid fa-trophy text-warning"></i> Daily Goal Progress
             </span>
-            <span class="fw-bold text-primary bg-primary-subtle px-3 py-1 rounded-pill fs-6" style="background-color: #e0e7ff; color: #4f46e5;">
-                <?php echo $completedActivities; ?> / <?php echo $totalActivities; ?> Done
+            <span class="fw-bold text-primary px-3 py-1 rounded-pill small" style="background-color: #e0e7ff;">
+                <?php echo (int)$completedActivities; ?> / <?php echo (int)$totalActivities; ?> Done
             </span>
         </div>
         <div class="progress-pill">
@@ -450,29 +363,29 @@ $logoutUrl = defined('BASE_URL')
     <!-- =================================================
          MAIN MODULES & GAMES
     ================================================== -->
-    <div class="d-flex align-items-center justify-content-between mb-4 animate-fade-in delay-3">
-        <h3 class="fw-bold text-dark mb-0">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="fw-bold text-dark mb-0 fs-4">
             <i class="fa-solid fa-gamepad text-primary me-2"></i> Learning Activities & Games
         </h3>
     </div>
 
-    <div class="row g-4 animate-fade-in delay-3">
+    <div class="row g-4">
 
         <!-- 1. PECS VISUAL BOARD -->
         <div class="col-md-6 col-lg-4">
             <a href="pecs.php" class="activity-card card-pecs">
                 <div>
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5;">
+                    <div class="icon-circle" style="background: #e0e7ff; color: #4f46e5;">
                         <i class="fa-solid fa-icons"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-2">Visual PECS Board</h4>
-                    <p class="text-muted small">
+                    <h4 class="activity-title">Visual PECS Board</h4>
+                    <p class="activity-desc">
                         Tap pictures to build sentences, hear words spoken aloud, and view automatic sentence suggestions.
                     </p>
                 </div>
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top border-light mt-3">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #e0e7ff; color: #4f46e5;">Communication</span>
-                    <i class="fa-solid fa-circle-arrow-right fs-4 text-primary"></i>
+                <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-4">
+                    <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #e0e7ff; color: #4f46e5; font-size: 0.85rem;">Communication</span>
+                    <i class="fa-solid fa-circle-arrow-right fs-3 text-primary"></i>
                 </div>
             </a>
         </div>
@@ -481,17 +394,17 @@ $logoutUrl = defined('BASE_URL')
         <div class="col-md-6 col-lg-4">
             <a href="speech.php" class="activity-card card-speech">
                 <div>
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669;">
+                    <div class="icon-circle" style="background: #d1fae5; color: #059669;">
                         <i class="fa-solid fa-microphone-lines"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-2">AI Speech & Grammar Lab</h4>
-                    <p class="text-muted small">
+                    <h4 class="activity-title">AI Speech & Grammar Lab</h4>
+                    <p class="activity-desc">
                         Speak into your mic. Get real-time supportive alerts and word suggestions to polish phrasing without pressure.
                     </p>
                 </div>
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top border-light mt-3">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #d1fae5; color: #059669;">Voice & Syntax</span>
-                    <i class="fa-solid fa-circle-arrow-right fs-4 text-success"></i>
+                <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-4">
+                    <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #d1fae5; color: #059669; font-size: 0.85rem;">Voice & Syntax</span>
+                    <i class="fa-solid fa-circle-arrow-right fs-3 text-success"></i>
                 </div>
             </a>
         </div>
@@ -500,17 +413,17 @@ $logoutUrl = defined('BASE_URL')
         <div class="col-md-6 col-lg-4">
             <a href="grammar.php" class="activity-card card-grammar">
                 <div>
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); color: #0d9488;">
+                    <div class="icon-circle" style="background: #ccfbf1; color: #0d9488;">
                         <i class="fa-solid fa-spell-check"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-2">Sentence Builder & Check</h4>
-                    <p class="text-muted small">
+                    <h4 class="activity-title">Sentence Builder & Check</h4>
+                    <p class="activity-desc">
                         Type or arrange words into sentences. Receive friendly tips for missing words or punctuation safely.
                     </p>
                 </div>
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top border-light mt-3">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #ccfbf1; color: #0d9488;">Grammar Helper</span>
-                    <i class="fa-solid fa-circle-arrow-right fs-4" style="color: #0d9488;"></i>
+                <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-4">
+                    <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #ccfbf1; color: #0d9488; font-size: 0.85rem;">Grammar Helper</span>
+                    <i class="fa-solid fa-circle-arrow-right fs-3" style="color: #0d9488;"></i>
                 </div>
             </a>
         </div>
@@ -519,17 +432,17 @@ $logoutUrl = defined('BASE_URL')
         <div class="col-md-6 col-lg-4">
             <a href="emotions.php" class="activity-card card-games" aria-label="Open Emotion Match Game">
                 <div>
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #ea580c;">
+                    <div class="icon-circle" style="background: #ffedd5; color: #ea580c;">
                         <i class="fa-solid fa-face-smile-beam"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-2">Emotion Match Game</h4>
-                    <p class="text-muted small">
+                    <h4 class="activity-title">Emotion Match Game</h4>
+                    <p class="activity-desc">
                         Match friendly facial expressions with feelings to build emotional recognition skills easily.
                     </p>
                 </div>
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top border-light mt-3">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #ffedd5; color: #ea580c;">New Game</span>
-                    <i class="fa-solid fa-circle-arrow-right fs-4" style="color: #ea580c;"></i>
+                <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-4">
+                    <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #ffedd5; color: #ea580c; font-size: 0.85rem;">New Game</span>
+                    <i class="fa-solid fa-circle-arrow-right fs-3" style="color: #ea580c;"></i>
                 </div>
             </a>
         </div>
@@ -538,17 +451,17 @@ $logoutUrl = defined('BASE_URL')
         <div class="col-md-6 col-lg-4">
             <a href="calm.php" class="activity-card card-calm">
                 <div>
-                    <div class="icon-circle" style="background: linear-gradient(135deg, #fef9c3, #fef08a); color: #ca8a04;">
+                    <div class="icon-circle" style="background: #fef9c3; color: #ca8a04;">
                         <i class="fa-solid fa-cloud-sun"></i>
                     </div>
-                    <h4 class="fw-bold text-dark mb-2">Calm Sensory Zone</h4>
-                    <p class="text-muted small">
+                    <h4 class="activity-title">Calm Sensory Zone</h4>
+                    <p class="activity-desc">
                         Relaxing visuals, soothing ambient background sounds, and guided breathing exercises.
                     </p>
                 </div>
-                <div class="d-flex align-items-center justify-content-between pt-3 border-top border-light mt-3">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="background-color: #fef9c3; color: #854d0e;">Relaxation</span>
-                    <i class="fa-solid fa-circle-arrow-right fs-4 text-warning"></i>
+                <div class="d-flex align-items-center justify-content-between pt-3 border-top mt-4">
+                    <span class="badge rounded-pill px-3 py-2 fw-bold" style="background-color: #fef9c3; color: #854d0e; font-size: 0.85rem;">Relaxation</span>
+                    <i class="fa-solid fa-circle-arrow-right fs-3 text-warning"></i>
                 </div>
             </a>
         </div>
