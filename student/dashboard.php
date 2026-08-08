@@ -472,5 +472,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI';
 
 <!-- Bootstrap 5 JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>
