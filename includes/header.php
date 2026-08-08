@@ -430,11 +430,11 @@ require_once __DIR__ . '/config.php';
         >
             <img 
                 src="<?php echo BASE_URL; ?>assets/icons/logo.png"
-                alt="AutiLearn AI Logo"
+                alt="Ascend Kids Development Logo"
                 class="brand-logo"
             >
 
-            <span>AutiLearn AI</span>
+            <span>Ascend Kids Development</span>
         </a>
 
 

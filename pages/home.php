@@ -143,7 +143,7 @@
                     Empowering Every <span>Autistic Child</span> To Learn At Their Own Pace
                 </h1>
                 <p class="hero-subtitle">
-                    AutiLearn AI combines picture-based communication (PECS), adaptive speech recognition, and real-time emotion detection to deliver calm, engaging, and personalized education.
+                    Ascend Kids Development combines picture-based communication (PECS), adaptive speech recognition, and real-time emotion detection to deliver calm, engaging, and personalized education.
                 </p>
                 <div class="d-flex flex-wrap gap-3 mt-4 justify-content-center justify-content-lg-start">
                     <a href="register.php" class="btn btn-custom-primary btn-lg">
@@ -157,7 +157,7 @@
 
             <div class="col-lg-6 text-center" data-aos="fade-left" data-aos-duration="1000">
                 <div class="hero-img-wrapper d-inline-block">
-                    <img src="assets/images/hero.png" alt="AutiLearn AI Learning Experience" class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=800&q=80'">
+                    <img src="assets/images/hero.png" alt="Ascend Kids Development Learning Experience" class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=800&q=80'">
                 </div>
             </div>
         </div>
@@ -170,7 +170,7 @@
     <div class="container py-4">
         <div class="text-center mb-5" data-aos="fade-up">
             
-            <h2 class="display-5 fw-bold">Why Choose AutiLearn AI?</h2>
+            <h2 class="display-5 fw-bold">Why Choose Ascend Kids Development?</h2>
             <p class="text-muted mx-auto" style="max-width: 650px;">Traditional methods can lead to sensory overload. We build learning around predictable routines, high-visual feedback, and soothing praise.</p>
         </div>
 

@@ -1,5 +1,5 @@
 <?php
-// teacher/students.php
+// teacher/speech_logs.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
@@ -21,50 +21,65 @@ $teacherName = $_SESSION['full_name'] ?? 'Instructor';
 $logoutUrl = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'teacher/dashboard.php' : 'dashboard.php';
 
-$usersList = [];
+$logs = [];
 $searchQuery = trim($_GET['search'] ?? '');
-$roleFilter = trim($_GET['role_filter'] ?? '');
 $dbError = null;
 
 try {
     if (isset($pdo)) {
-        // Query adjusted to display all users with roles and optional search/role filters
+        // Automatically create or update the speech_logs table structure safely with all required columns
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS speech_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                transcript TEXT NOT NULL,
+                confidence_score DECIMAL(5,2) DEFAULT 0.00,
+                status VARCHAR(50) DEFAULT 'Completed',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+
+        // Safely check and add 'confidence_score' column if it's missing in an existing table structure
+        $checkCol = $pdo->query("SHOW COLUMNS FROM speech_logs LIKE 'confidence_score'");
+        if ($checkCol->rowCount() == 0) {
+            $pdo->exec("ALTER TABLE speech_logs ADD COLUMN confidence_score DECIMAL(5,2) DEFAULT 0.00 AFTER transcript");
+        }
+
+        // Fetch speech logs joining with users table safely
         $sql = "
-            SELECT u.id, 
+            SELECT l.id, 
+                   l.user_id, 
+                   l.transcript, 
+                   l.confidence_score, 
+                   l.status, 
+                   l.created_at,
                    u.first_name, 
                    u.last_name, 
                    u.full_name, 
-                   u.email, 
-                   u.role, 
-                   u.parent_email,
-                   u.created_at
-            FROM users u
-            WHERE 1=1
+                   u.email
+            FROM speech_logs l
+            JOIN users u ON l.user_id = u.id
         ";
 
         $params = [];
 
-        // Role Filter condition
-        if (!empty($roleFilter)) {
-            $sql .= " AND u.role = :role_filter";
-            $params['role_filter'] = $roleFilter;
-        }
-
-        // Search Query condition across email and name fields
         if (!empty($searchQuery)) {
-            $sql .= " AND (u.email LIKE :s_email OR u.full_name LIKE :s_fullname OR u.first_name LIKE :s_firstname OR u.last_name LIKE :s_lastname)";
+            $sql .= " WHERE (u.email LIKE :s_email OR u.full_name LIKE :s_fullname OR u.first_name LIKE :s_firstname OR u.last_name LIKE :s_lastname OR l.transcript LIKE :s_transcript)";
             $searchTerm = '%' . $searchQuery . '%';
-            $params['s_email'] = $searchTerm;
-            $params['s_fullname'] = $searchTerm;
-            $params['s_firstname'] = $searchTerm;
-            $params['s_lastname'] = $searchTerm;
+            $params = [
+                's_email' => $searchTerm,
+                's_fullname' => $searchTerm,
+                's_firstname' => $searchTerm,
+                's_lastname' => $searchTerm,
+                's_transcript' => $searchTerm
+            ];
         }
 
-        $sql .= " ORDER BY u.created_at DESC";
+        $sql .= " ORDER BY l.created_at DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-        $usersList = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
         $dbError = "Database connection object (\$pdo) is not initialized.";
     }
@@ -78,7 +93,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Users Directory | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Speech Lab Logs | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -149,8 +164,8 @@ try {
             <i class="fa-solid fa-chalkboard-user text-success fs-2"></i> Teacher Portal
         </a>
         <div class="d-flex align-items-center gap-3">
-            <a href="speech_logs.php" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
-                <i class="fa-solid fa-microphone-lines me-1"></i> Speech Logs
+            <a href="students.php" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
+                <i class="fa-solid fa-users me-1"></i> Students
             </a>
             <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
                 <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
@@ -170,14 +185,14 @@ try {
             <div class="p-4 p-md-5 rounded-4 bg-white border border-success-subtle shadow-sm d-md-flex align-items-center justify-content-between">
                 <div>
                     <span class="badge bg-success-subtle text-success rounded-pill px-3 py-2 fw-semibold fs-6 mb-2">
-                        <i class="fa-solid fa-users-gear me-1"></i> User Directories
+                        <i class="fa-solid fa-microphone-lines me-1"></i> Speech Monitoring
                     </span>
-                    <h1 class="brand-font text-success mb-1">System Users Management</h1>
-                    <p class="text-secondary mb-0">View all registered accounts (Students, Parents, Teachers, Admins), roles, and contact details.</p>
+                    <h1 class="brand-font text-success mb-1">Student Speech Activity Logs</h1>
+                    <p class="text-secondary mb-0">Inspect real-time student speech transcripts, confidence scores, and lab session tracking data.</p>
                 </div>
                 <div class="mt-3 mt-md-0">
                     <span class="badge bg-light text-dark p-3 rounded-4 border fs-6">
-                        <i class="fa-solid fa-user-group text-success me-2"></i> Total Users: <?php echo count($usersList); ?>
+                        <i class="fa-solid fa-file-waveform text-success me-2"></i> Total Logs: <?php echo count($logs); ?>
                     </span>
                 </div>
             </div>
@@ -191,30 +206,24 @@ try {
         </div>
     <?php endif; ?>
 
-    <!-- SMART SEARCH & ROLE FILTER BAR -->
+    <!-- SMART SEARCH BAR -->
     <div class="dashboard-section py-4 mb-4">
         <form method="GET" action="" class="row g-3 align-items-center">
-            <div class="col-lg-6">
+            <div class="col-lg-9">
                 <div class="input-group">
                     <span class="input-group-text bg-light border-end-0 text-success ps-3"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0 ps-2 shadow-none py-2" placeholder="Search by email or name..." value="<?php echo htmlspecialchars($searchQuery); ?>">
+                    <input type="text" name="search" class="form-control border-start-0 ps-2 shadow-none py-2" placeholder="Search by student email, name, or speech transcript keyword..." value="<?php echo htmlspecialchars($searchQuery); ?>">
                 </div>
-            </div>
-            <div class="col-lg-3">
-                <select name="role_filter" class="form-select shadow-none py-2">
-                    <option value="">All Roles</option>
-                    <option value="student" <?php echo ($roleFilter === 'student') ? 'selected' : ''; ?>>Student</option>
-                    <option value="parent" <?php echo ($roleFilter === 'parent') ? 'selected' : ''; ?>>Parent</option>
-                    <option value="teacher" <?php echo ($roleFilter === 'teacher') ? 'selected' : ''; ?>>Teacher</option>
-                    <option value="admin" <?php echo ($roleFilter === 'admin') ? 'selected' : ''; ?>>Admin</option>
-                </select>
+                <span class="search-hint">
+                    <i class="fa-solid fa-lightbulb text-warning me-1"></i> Tip: Enter student email fragments or words spoken in speech activities to filter results.
+                </span>
             </div>
             <div class="col-lg-3 d-flex gap-2">
                 <button type="submit" class="btn btn-success flex-grow-1 fw-semibold rounded-pill py-2">
-                    <i class="fa-solid fa-filter me-1"></i> Filter
+                    <i class="fa-solid fa-filter me-1"></i> Filter Logs
                 </button>
-                <?php if (!empty($searchQuery) || !empty($roleFilter)): ?>
-                    <a href="students.php" class="btn btn-outline-secondary rounded-pill py-2 px-3" title="Reset Filters">
+                <?php if (!empty($searchQuery)): ?>
+                    <a href="speech_logs.php" class="btn btn-outline-secondary rounded-pill py-2 px-3" title="Clear Filter">
                         <i class="fa-solid fa-rotate-right"></i>
                     </a>
                 <?php endif; ?>
@@ -222,15 +231,15 @@ try {
         </form>
     </div>
 
-    <!-- USERS LIST TABLE -->
+    <!-- SPEECH LOGS TABLE -->
     <div class="dashboard-section">
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-4">
             <h4 class="fw-bold text-dark mb-0 brand-font">
-                <i class="fa-solid id-card text-success me-2"></i>Registered Account Records
+                <i class="fa-solid fa-wave-square text-success me-2"></i>Recorded Speech Sessions
             </h4>
-            <?php if (!empty($searchQuery) || !empty($roleFilter)): ?>
+            <?php if (!empty($searchQuery)): ?>
                 <span class="badge bg-primary-subtle text-primary px-3 py-2 rounded-pill fw-semibold">
-                    Filters applied
+                    Active Query: "<?php echo htmlspecialchars($searchQuery); ?>"
                 </span>
             <?php endif; ?>
         </div>
@@ -239,79 +248,67 @@ try {
             <table class="table table-custom align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>User Name</th>
-                        <th>Email Address</th>
-                        <th>Role</th>
-                        <th>Parent Contact</th>
-                        <th>Registration Date</th>
-                        <th class="text-end">Actions</th>
+                        <th>Student Details</th>
+                        <th>Speech Transcript</th>
+                        <th>Confidence Score</th>
+                        <th>Timestamp</th>
+                        <th class="text-end">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($usersList)): ?>
+                    <?php if (empty($logs)): ?>
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
+                            <td colspan="5" class="text-center py-5 text-muted">
                                 <div class="py-3">
-                                    <i class="fa-solid fa-user-slash text-secondary fs-2 mb-2 d-block"></i>
-                                    <h5 class="fw-bold text-dark">No user accounts found</h5>
-                                    <p class="small mb-0">No records matched your current query criteria. Try clearing filters.</p>
+                                    <i class="fa-solid fa-microphone-slash text-secondary fs-2 mb-2 d-block"></i>
+                                    <h5 class="fw-bold text-dark">No speech logs found</h5>
+                                    <p class="small mb-0">No records match your query "<strong><?php echo htmlspecialchars($searchQuery); ?></strong>".</p>
                                 </div>
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($usersList as $user): ?>
+                        <?php foreach ($logs as $log): ?>
                             <?php 
-                                // Construct displayName fallback from available columns
-                                $displayName = trim($user['full_name'] ?? '');
-                                if (empty($displayName)) {
-                                    $displayName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+                                $studentName = trim($log['full_name'] ?? '');
+                                if (empty($studentName)) {
+                                    $studentName = trim(($log['first_name'] ?? '') . ' ' . ($log['last_name'] ?? ''));
                                 }
-                                if (empty($displayName)) {
-                                    $displayName = 'User #' . $user['id'];
+                                if (empty($studentName)) {
+                                    $studentName = 'Student #' . $log['user_id'];
                                 }
 
-                                $roleVal = strtolower($user['role'] ?? 'student');
-                                $badgeClass = 'bg-secondary-subtle text-secondary';
-                                if ($roleVal === 'student') $badgeClass = 'bg-success-subtle text-success';
-                                elseif ($roleVal === 'parent') $badgeClass = 'bg-primary-subtle text-primary';
-                                elseif ($roleVal === 'teacher') $badgeClass = 'bg-warning-subtle text-warning text-dark';
-                                elseif ($roleVal === 'admin') $badgeClass = 'bg-danger-subtle text-danger';
+                                $score = floatval($log['confidence_score'] ?? 0);
                             ?>
                             <tr>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px; font-size: 0.95rem;">
-                                            <?php echo strtoupper(substr($displayName, 0, 1)); ?>
+                                        <div class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 38px; height: 38px; font-size: 0.9rem;">
+                                            <?php echo strtoupper(substr($studentName, 0, 1)); ?>
                                         </div>
                                         <div>
-                                            <span class="fw-semibold text-dark d-block"><?php echo htmlspecialchars($displayName); ?></span>
-                                            <small class="text-muted" style="font-size: 0.75rem;">ID: #<?php echo $user['id']; ?></small>
+                                            <span class="fw-semibold text-dark d-block"><?php echo htmlspecialchars($studentName); ?></span>
+                                            <small class="text-secondary" style="font-size: 0.75rem;"><?php echo htmlspecialchars($log['email'] ?? ''); ?></small>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="text-secondary fw-medium">
-                                        <i class="fa-regular fa-envelope me-1 text-success"></i> <?php echo htmlspecialchars($user['email'] ?? 'No email'); ?>
+                                    <span class="text-dark fst-italic" style="max-width: 350px; display: inline-block;">
+                                        "<?php echo htmlspecialchars($log['transcript']); ?>"
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge <?php echo $badgeClass; ?> text-uppercase fw-bold px-2.5 py-1.5 rounded-pill">
-                                        <?php echo htmlspecialchars($user['role'] ?? 'student'); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="text-muted small">
-                                        <i class="fa-solid fa-user-shield me-1 text-primary"></i> <?php echo htmlspecialchars($user['parent_email'] ?? 'None'); ?>
+                                    <span class="badge bg-success-subtle text-success fw-bold px-3 py-2">
+                                        <?php echo number_format($score, 1); ?>% Accuracy
                                     </span>
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark fw-semibold px-2 py-1 border">
-                                        <?php echo !empty($user['created_at']) ? date('M j, Y', strtotime($user['created_at'])) : 'N/A'; ?>
+                                        <?php echo !empty($log['created_at']) ? date('M j, Y, g:i a', strtotime($log['created_at'])) : 'N/A'; ?>
                                     </span>
                                 </td>
                                 <td class="text-end">
-                                    <a href="student_profile.php?id=<?php echo $user['id']; ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
-                                        <i class="fa-solid fa-eye me-1"></i> View Info
+                                    <a href="student_profile.php?id=<?php echo $log['user_id']; ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
+                                        <i class="fa-solid fa-eye me-1"></i> Profile
                                     </a>
                                 </td>
                             </tr>
