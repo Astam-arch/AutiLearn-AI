@@ -1,5 +1,4 @@
 <?php
-// parent/dashboard.php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -7,7 +6,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// Support both $pdo and $conn DB connection objects
 if (!isset($pdo) && isset($conn)) {
     $pdo = $conn;
 }
@@ -15,9 +13,6 @@ if (!$pdo) {
     die("Database connection error. Please check includes/db.php");
 }
 
-// -----------------------------------------------------------------------------
-// SESSION & ROLE GUARD
-// -----------------------------------------------------------------------------
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
     header("Location: {$loginUrl}");
@@ -34,13 +29,11 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'parent' && $_SESSION['rol
 $parentId   = $_SESSION['user_id'];
 $parentName = $_SESSION['full_name'] ?? 'Parent';
 $logoutUrl  = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
+$profileUrl = defined('BASE_URL') ? BASE_URL . 'parent/profile.php' : 'profile.php';
 
 $flashMessage = '';
 $flashType    = 'success';
 
-// -----------------------------------------------------------------------------
-// POST FORM HANDLERS (ADD CHILD & QUICK LOG)
-// -----------------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -82,7 +75,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stars           = (int)($_POST['stars_earned'] ?? 1);
 
         if ($selectedChildId > 0) {
-            // Insert Activity Log
             $logStmt = $pdo->prepare("INSERT INTO activity_logs (child_id, activity_type, title, description, duration_minutes, icon_class, color_code) VALUES (?, ?, ?, ?, ?, ?, ?)");
             
             $icon  = ($activityType === 'speech') ? 'fa-microphone-lines' : (($activityType === 'sensory') ? 'fa-spa' : 'fa-graduation-cap');
@@ -91,7 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $logStmt->execute([$selectedChildId, $activityType, $title, $desc, $duration, $icon, $color]);
 
-            // If Speech log data is provided
             if ($activityType === 'speech' && !empty($_POST['target_word'])) {
                 $targetWord = trim($_POST['target_word']);
                 $heardWord  = trim($_POST['heard_word'] ?? $targetWord);
@@ -116,9 +107,6 @@ if (isset($_GET['msg'])) {
     }
 }
 
-// -----------------------------------------------------------------------------
-// 1. FETCH ALL LINKED CHILDREN & SELECT ACTIVE CHILD
-// -----------------------------------------------------------------------------
 $childrenStmt = $pdo->prepare("SELECT id, first_name, last_name, date_of_birth FROM children WHERE parent_id = ? ORDER BY id ASC");
 $childrenStmt->execute([$parentId]);
 $childrenList = $childrenStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -133,7 +121,6 @@ if (isset($_GET['child_id'])) {
     $activeChildId = !empty($childrenList) ? (int)$childrenList[0]['id'] : null;
 }
 
-// Find active child array
 $activeChild = null;
 foreach ($childrenList as $c) {
     if ((int)$c['id'] === $activeChildId) {
@@ -157,9 +144,6 @@ if ($activeChild && !empty($activeChild['date_of_birth'])) {
     $childAge = $diff->y . " Years";
 }
 
-// -----------------------------------------------------------------------------
-// 2. FETCH REAL AGGREGATED METRICS
-// -----------------------------------------------------------------------------
 $completedLessons = 0;
 $speechAccuracy   = "0%";
 $calmSessions     = 0;
@@ -167,94 +151,27 @@ $weeklyStars      = 0;
 $weeklyGoalPct    = 0;
 
 if ($activeChildId) {
-    // Total Completed Lessons
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs WHERE child_id = ? AND activity_type = 'lesson'");
     $stmt->execute([$activeChildId]);
     $completedLessons = (int)$stmt->fetchColumn();
 
-    // Average Speech Accuracy Score
     $stmt = $pdo->prepare("SELECT AVG(accuracy_score) FROM speech_logs WHERE child_id = ?");
     $stmt->execute([$activeChildId]);
     $avgAccuracy = $stmt->fetchColumn();
     $speechAccuracy = $avgAccuracy ? round($avgAccuracy) . "%" : "0%";
 
-    // Sensory Calm Sessions
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs WHERE child_id = ? AND activity_type = 'sensory'");
     $stmt->execute([$activeChildId]);
     $calmSessions = (int)$stmt->fetchColumn();
 
-    // Total Weekly Stars (Last 7 Days)
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(stars_earned), 0) FROM speech_logs WHERE child_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
     $stmt->execute([$activeChildId]);
     $weeklyStars = (int)$stmt->fetchColumn();
 
-    // Weekly Goal Progress (Target: 50 Stars)
     $weeklyGoalTarget = 50;
     $weeklyGoalPct = min(100, round(($weeklyStars / $weeklyGoalTarget) * 100));
 }
 
-// -----------------------------------------------------------------------------
-// 3. FETCH 7-DAY ACTIVITY FOR CHART.JS
-// -----------------------------------------------------------------------------
-$chartDays = [];
-$speechMinutesData  = [0, 0, 0, 0, 0, 0, 0];
-$lessonMinutesData  = [0, 0, 0, 0, 0, 0, 0];
-$sensoryMinutesData = [0, 0, 0, 0, 0, 0, 0];
-
-for ($i = 6; $i >= 0; $i--) {
-    $dateKey = date('Y-m-d', strtotime("-$i days"));
-    $chartDays[] = date('D', strtotime("-$i days"));
-    $dayIndex = 6 - $i;
-
-    if ($activeChildId) {
-        // Speech Practice Minutes
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(duration_minutes), 0) FROM activity_logs WHERE child_id = ? AND activity_type = 'speech' AND DATE(created_at) = ?");
-        $stmt->execute([$activeChildId, $dateKey]);
-        $speechMinutesData[$dayIndex] = (int)$stmt->fetchColumn();
-
-        // Lesson Minutes
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(duration_minutes), 0) FROM activity_logs WHERE child_id = ? AND activity_type = 'lesson' AND DATE(created_at) = ?");
-        $stmt->execute([$activeChildId, $dateKey]);
-        $lessonMinutesData[$dayIndex] = (int)$stmt->fetchColumn();
-
-        // Sensory Minutes
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(duration_minutes), 0) FROM activity_logs WHERE child_id = ? AND activity_type = 'sensory' AND DATE(created_at) = ?");
-        $stmt->execute([$activeChildId, $dateKey]);
-        $sensoryMinutesData[$dayIndex] = (int)$stmt->fetchColumn();
-    }
-}
-
-// -----------------------------------------------------------------------------
-// 4. FETCH SKILL COMPETENCY & DYNAMIC AI RECOMMENDATION
-// -----------------------------------------------------------------------------
-$skills = [];
-if ($activeChildId) {
-    $stmt = $pdo->prepare("SELECT skill_name, score FROM skill_competency WHERE child_id = ? ORDER BY score ASC");
-    $stmt->execute([$activeChildId]);
-    $skills = $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-// Fallback Skills if DB table isn't populated for this child
-if (empty($skills) && $activeChildId) {
-    $skills = [
-        ['skill_name' => 'Speech & Pronunciation', 'score' => 70],
-        ['skill_name' => 'Emotion Recognition', 'score' => 85],
-        ['skill_name' => 'Daily Life Routines', 'score' => 65],
-        ['skill_name' => 'Sensory Self-Regulation', 'score' => 80],
-    ];
-}
-
-$aiRecommendation = "Create a child profile to generate dynamic learning analytics.";
-if (!empty($skills)) {
-    usort($skills, function($a, $b) { return $a['score'] <=> $b['score']; });
-    $lowestSkill = $skills[0];
-    $aiRecommendation = "Focus on <strong>" . htmlspecialchars($lowestSkill['skill_name']) . "</strong> (" . $lowestSkill['score'] . "% accuracy). Re-engaging with targeted practice modules can boost this metric.";
-    usort($skills, function($a, $b) { return strcmp($a['skill_name'], $b['skill_name']); });
-}
-
-// -----------------------------------------------------------------------------
-// 5. FETCH SPEECH LOGS AND ACTIVITY FEED
-// -----------------------------------------------------------------------------
 $speechLogs = [];
 $activityLogs = [];
 if ($activeChildId) {
@@ -283,15 +200,9 @@ function timeAgo($datetime) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Analytics & Dashboard | AutiLearn AI</title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
     <style>
         :root {
             --bg-neutral: #f8fafc;
@@ -299,24 +210,20 @@ function timeAgo($datetime) {
             --parent-accent: #2563eb;
             --card-radius: 20px;
         }
-
         body {
             background-color: var(--bg-neutral);
             font-family: 'Poppins', sans-serif;
             color: #334155;
             padding-bottom: 60px;
         }
-
         h1, h2, h3, h4, .brand-font {
             font-family: 'Fredoka', cursive, sans-serif;
         }
-
         .navbar-parent {
             background: #ffffff;
             border-bottom: 2px solid #e2e8f0;
             padding: 14px 0;
         }
-
         .metric-card {
             background: #ffffff;
             border-radius: var(--card-radius);
@@ -325,12 +232,10 @@ function timeAgo($datetime) {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
             transition: all 0.25s ease;
         }
-
         .metric-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
         }
-
         .icon-circle {
             width: 56px;
             height: 56px;
@@ -340,19 +245,16 @@ function timeAgo($datetime) {
             justify-content: center;
             font-size: 1.5rem;
         }
-
         .timeline-item {
             position: relative;
             padding-left: 32px;
             padding-bottom: 24px;
             border-left: 2px solid #e2e8f0;
         }
-
         .timeline-item:last-child {
             border-left-color: transparent;
             padding-bottom: 0;
         }
-
         .timeline-icon {
             position: absolute;
             left: -15px;
@@ -366,7 +268,6 @@ function timeAgo($datetime) {
             color: #ffffff;
             font-size: 0.85rem;
         }
-
         @media print {
             .no-print { display: none !important; }
             body { background: #ffffff; }
@@ -383,7 +284,6 @@ function timeAgo($datetime) {
         </a>
 
         <div class="d-flex align-items-center gap-2 flex-wrap">
-            <!-- CHILD SELECTOR DROPDOWN -->
             <?php if (!empty($childrenList)): ?>
                 <div class="dropdown">
                     <button class="btn btn-light border rounded-pill px-3 py-1 dropdown-toggle fw-semibold text-dark small" type="button" data-bs-toggle="dropdown">
@@ -393,7 +293,7 @@ function timeAgo($datetime) {
                         <li><h6 class="dropdown-header">Switch Child Profile</h6></li>
                         <?php foreach ($childrenList as $item): ?>
                             <li>
-                                <a class="dropdown-menu-item dropdown-item small <?php echo ($item['id'] == $activeChildId) ? 'active fw-bold' : ''; ?>" 
+                                <a class="dropdown-item small <?php echo ($item['id'] == $activeChildId) ? 'active fw-bold' : ''; ?>" 
                                    href="dashboard.php?child_id=<?php echo $item['id']; ?>">
                                     <i class="fa-solid fa-user me-2"></i><?php echo htmlspecialchars($item['first_name'] . ' ' . $item['last_name']); ?>
                                 </a>
@@ -407,10 +307,6 @@ function timeAgo($datetime) {
                         </li>
                     </ul>
                 </div>
-            <?php else: ?>
-                <button class="btn btn-success btn-sm rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#addChildModal">
-                    <i class="fa-solid fa-plus me-1"></i> Add Child Profile
-                </button>
             <?php endif; ?>
 
             <?php if ($activeChildId): ?>
@@ -419,9 +315,10 @@ function timeAgo($datetime) {
                 </button>
             <?php endif; ?>
 
-            <button onclick="exportToCSV()" class="btn btn-outline-secondary rounded-pill px-3 btn-sm fw-semibold">
-                <i class="fa-solid fa-file-csv me-1"></i> Export
-            </button>
+            <a href="<?php echo htmlspecialchars($profileUrl); ?>" class="btn btn-outline-dark rounded-pill px-3 btn-sm fw-semibold">
+                <i class="fa-solid fa-user-gear me-1"></i> Profile
+            </a>
+
             <button onclick="window.print()" class="btn btn-outline-secondary rounded-pill px-3 btn-sm fw-semibold">
                 <i class="fa-solid fa-print me-1"></i> Print
             </button>
@@ -433,8 +330,6 @@ function timeAgo($datetime) {
 </nav>
 
 <div class="container">
-
-    <!-- FLASH MESSAGES -->
     <?php if (!empty($flashMessage)): ?>
         <div class="alert alert-<?php echo $flashType; ?> alert-dismissible fade show rounded-4 mb-4" role="alert">
             <i class="fa-solid fa-circle-check me-2"></i> <?php echo $flashMessage; ?>
@@ -442,21 +337,7 @@ function timeAgo($datetime) {
         </div>
     <?php endif; ?>
 
-    <!-- EMPTY CHILD WARNING CALLOUT -->
-    <?php if (!$activeChildId): ?>
-        <div class="card border-warning bg-warning-subtle rounded-4 mb-4 p-4 text-center">
-            <div class="card-body py-3">
-                <i class="fa-solid fa-child-triangle-exclamation fs-1 text-warning mb-3"></i>
-                <h3 class="brand-font fw-bold text-dark mb-2">No Child Profile Linked</h3>
-                <p class="text-secondary max-w-md mx-auto mb-3">You haven't added a child profile yet. Create a child profile now to start logging speech practice, tracking lessons, and analyzing progress.</p>
-                <button class="btn btn-primary rounded-pill px-4 py-2 fw-semibold" data-bs-toggle="modal" data-bs-target="#addChildModal">
-                    <i class="fa-solid fa-user-plus me-2"></i>Create Child Profile Now
-                </button>
-            </div>
-        </div>
-    <?php endif; ?>
-
-    <!-- WELCOME & OVERVIEW HEADER -->
+    <!-- WELCOME HEADER -->
     <div class="bg-primary text-white rounded-4 p-4 p-md-5 mb-4 shadow-sm" style="background: linear-gradient(135deg, #1e3a8a, #2563eb) !important;">
         <div class="row align-items-center">
             <div class="col-md-8">
@@ -464,7 +345,7 @@ function timeAgo($datetime) {
                 <h2 class="brand-font fw-bold fs-1 mb-2">Welcome back, <?php echo htmlspecialchars($parentName); ?>!</h2>
                 <p class="opacity-90 fs-5 mb-0">
                     <?php if ($activeChildId): ?>
-                        Here is live analytics tracking how <strong><?php echo $childName; ?></strong> is progressing in speech clarity, lessons, and sensory regulation.
+                        Tracking how <strong><?php echo $childName; ?></strong> is progressing in speech clarity, lessons, and sensory regulation.
                     <?php else: ?>
                         Configure a child profile below to unlock real-time learning metrics.
                     <?php endif; ?>
@@ -473,16 +354,12 @@ function timeAgo($datetime) {
             <?php if ($activeChildId): ?>
             <div class="col-md-4 text-md-end mt-3 mt-md-0 no-print">
                 <div class="bg-white bg-opacity-10 rounded-4 p-3 d-inline-block text-start border border-white border-opacity-25">
-                    <div class="small text-white-50 uppercase fw-semibold">Weekly Goal Progress</div>
+                    <div class="small text-white-50 text-uppercase fw-semibold">Weekly Goal Progress</div>
                     <div class="d-flex align-items-center gap-2 my-1">
                         <div class="progress flex-grow-1" style="height: 10px; min-width: 120px; background: rgba(255,255,255,0.2);">
                             <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo $weeklyGoalPct; ?>%;"></div>
                         </div>
                         <span class="fw-bold fs-5 text-warning"><?php echo $weeklyGoalPct; ?>%</span>
-                    </div>
-                    <div class="small text-white opacity-75">
-                        <i class="fa-solid fa-circle-check me-1 text-warning"></i> 
-                        <?php echo $weeklyGoalPct >= 80 ? 'On track to reach goal' : 'Keep practicing to meet target'; ?>
                     </div>
                 </div>
             </div>
@@ -496,152 +373,76 @@ function timeAgo($datetime) {
             <div class="metric-card">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <span class="text-secondary fw-semibold small">Lessons Completed</span>
-                    <div class="icon-circle bg-primary-subtle text-primary">
-                        <i class="fa-solid fa-graduation-cap"></i>
-                    </div>
+                    <div class="icon-circle bg-primary-subtle text-primary"><i class="fa-solid fa-graduation-cap"></i></div>
                 </div>
                 <h2 class="brand-font fw-bold text-dark mb-1"><?php echo $completedLessons; ?></h2>
-                <span class="text-success small fw-semibold"><i class="fa-solid fa-check me-1"></i>Verified DB Total</span>
+                <span class="text-success small fw-semibold"><i class="fa-solid fa-check me-1"></i>Verified Total</span>
             </div>
         </div>
-
         <div class="col">
             <div class="metric-card">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <span class="text-secondary fw-semibold small">Speech Clarity Score</span>
-                    <div class="icon-circle bg-success-subtle text-success">
-                        <i class="fa-solid fa-microphone-lines"></i>
-                    </div>
+                    <div class="icon-circle bg-success-subtle text-success"><i class="fa-solid fa-microphone-lines"></i></div>
                 </div>
                 <h2 class="brand-font fw-bold text-dark mb-1"><?php echo $speechAccuracy; ?></h2>
                 <span class="text-success small fw-semibold"><i class="fa-solid fa-chart-line me-1"></i>Avg accuracy</span>
             </div>
         </div>
-
         <div class="col">
             <div class="metric-card">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <span class="text-secondary fw-semibold small">Sensory Calm Sessions</span>
-                    <div class="icon-circle bg-info-subtle text-info">
-                        <i class="fa-solid fa-spa"></i>
-                    </div>
+                    <div class="icon-circle bg-info-subtle text-info"><i class="fa-solid fa-spa"></i></div>
                 </div>
                 <h2 class="brand-font fw-bold text-dark mb-1"><?php echo $calmSessions; ?></h2>
                 <span class="text-muted small fw-semibold">Completed sessions</span>
             </div>
         </div>
-
         <div class="col">
             <div class="metric-card">
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <span class="text-secondary fw-semibold small">Stars Earned (7 Days)</span>
-                    <div class="icon-circle bg-warning-subtle text-warning">
-                        <i class="fa-solid fa-star"></i>
-                    </div>
+                    <div class="icon-circle bg-warning-subtle text-warning"><i class="fa-solid fa-star"></i></div>
                 </div>
                 <h2 class="brand-font fw-bold text-dark mb-1"><?php echo $weeklyStars; ?></h2>
-                <span class="text-warning-emphasis small fw-semibold">Milestone Target: 50</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- CHARTS & DETAILED ANALYTICS SECTION -->
-    <div class="row g-4 mb-4">
-        <!-- Weekly Learning Activity Chart -->
-        <div class="col-lg-8">
-            <div class="bg-white rounded-4 p-4 border shadow-sm h-100">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                        <h4 class="brand-font fw-bold text-dark m-0">Weekly Activity & Speech Practice</h4>
-                        <p class="text-muted small m-0">Daily minutes spent on speech, lessons, and calming</p>
-                    </div>
-                    <span class="badge bg-light text-dark border px-3 py-2 fw-normal">Last 7 Days</span>
-                </div>
-                <div style="height: 280px;">
-                    <canvas id="weeklyActivityChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- Skills Competency & Dynamic AI Recommendation -->
-        <div class="col-lg-4">
-            <div class="bg-white rounded-4 p-4 border shadow-sm h-100">
-                <h4 class="brand-font fw-bold text-dark mb-3">Skill Competency</h4>
-                
-                <?php foreach ($skills as $skill): 
-                    $score = (int)$skill['score'];
-                    $colorClass = 'bg-primary';
-                    if ($score >= 85) $colorClass = 'bg-success';
-                    elseif ($score >= 70) $colorClass = 'bg-info';
-                    elseif ($score >= 50) $colorClass = 'bg-warning';
-                    else $colorClass = 'bg-danger';
-                ?>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between small fw-semibold mb-1">
-                            <span><?php echo htmlspecialchars($skill['skill_name']); ?></span>
-                            <span class="text-dark"><?php echo $score; ?>%</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar <?php echo $colorClass; ?>" style="width: <?php echo $score; ?>%;"></div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-
-                <div class="p-3 bg-light rounded-3 mt-4 border">
-                    <div class="d-flex gap-2 text-primary fw-semibold small mb-1">
-                        <i class="fa-solid fa-lightbulb mt-1"></i> Dynamic AI Insight:
-                    </div>
-                    <p class="small text-muted m-0"><?php echo $aiRecommendation; ?></p>
-                </div>
+                <span class="text-warning-emphasis small fw-semibold">Target: 50 Stars</span>
             </div>
         </div>
     </div>
 
     <!-- SPEECH LOGS AND RECENT ACTIVITY -->
     <div class="row g-4">
-        <!-- Speech Lab Practice History -->
         <div class="col-lg-7">
             <div class="bg-white rounded-4 p-4 border shadow-sm h-100">
                 <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h4 class="brand-font fw-bold text-dark m-0">
-                        <i class="fa-solid fa-microphone-lines text-success me-2"></i>Speech Lab Logs
-                    </h4>
-                    <span class="small text-muted">Recent speech recognition tests</span>
+                    <h4 class="brand-font fw-bold text-dark m-0"><i class="fa-solid fa-microphone-lines text-success me-2"></i>Speech Lab Logs</h4>
                 </div>
-
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle" id="speechLogsTable">
-                        <thead class="table-light small uppercase">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light small text-uppercase">
                             <tr>
                                 <th>Target Word</th>
                                 <th>AI Heard</th>
                                 <th>Clarity</th>
                                 <th>Stars</th>
-                                <th>Date/Time</th>
+                                <th>Time</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($speechLogs)): ?>
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
-                                        <i class="fa-solid fa-circle-info me-1"></i> No speech practice logs recorded yet.
-                                    </td>
-                                </tr>
+                                <tr><td colspan="5" class="text-center text-muted py-4">No speech practice logs recorded yet.</td></tr>
                             <?php else: ?>
                                 <?php foreach ($speechLogs as $log): 
                                     $acc = (int)$log['accuracy_score'];
-                                    $badgeClass = 'bg-danger';
-                                    if ($acc >= 85) $badgeClass = 'bg-success';
-                                    elseif ($acc >= 70) $badgeClass = 'bg-warning text-dark';
+                                    $badgeClass = ($acc >= 85) ? 'bg-success' : (($acc >= 70) ? 'bg-warning text-dark' : 'bg-danger');
                                 ?>
                                     <tr>
                                         <td class="fw-bold text-dark"><?php echo htmlspecialchars($log['target_word']); ?></td>
                                         <td class="fst-italic text-secondary">"<?php echo htmlspecialchars($log['heard_word']); ?>"</td>
                                         <td><span class="badge <?php echo $badgeClass; ?> px-2 py-1"><?php echo $acc; ?>%</span></td>
                                         <td class="text-warning">
-                                            <?php for($i=0; $i < (int)$log['stars_earned']; $i++): ?>
-                                                <i class="fa-solid fa-star"></i>
-                                            <?php endfor; ?>
+                                            <?php for($i=0; $i < (int)$log['stars_earned']; $i++): ?><i class="fa-solid fa-star"></i><?php endfor; ?>
                                         </td>
                                         <td class="small text-muted"><?php echo timeAgo($log['created_at']); ?></td>
                                     </tr>
@@ -653,13 +454,9 @@ function timeAgo($datetime) {
             </div>
         </div>
 
-        <!-- Recent Learning Activity Feed -->
         <div class="col-lg-5">
             <div class="bg-white rounded-4 p-4 border shadow-sm h-100">
-                <h4 class="brand-font fw-bold text-dark mb-4">
-                    <i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Recent Activity
-                </h4>
-
+                <h4 class="brand-font fw-bold text-dark mb-4"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Recent Activity</h4>
                 <div class="ps-2">
                     <?php if (empty($activityLogs)): ?>
                         <p class="text-center text-muted py-4">No recent activity logged.</p>
@@ -681,15 +478,13 @@ function timeAgo($datetime) {
     </div>
 </div>
 
-<!-- ========================================================================= -->
-<!-- MODAL 1: ADD CHILD PROFILE -->
-<!-- ========================================================================= -->
+<!-- ADD CHILD MODAL -->
 <div class="modal fade" id="addChildModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header bg-primary text-white border-0 rounded-top-4">
                 <h5 class="modal-title brand-font fw-bold"><i class="fa-solid fa-child-reaching me-2"></i>Link New Child Profile</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="dashboard.php">
                 <div class="modal-body p-4">
@@ -718,16 +513,14 @@ function timeAgo($datetime) {
     </div>
 </div>
 
-<!-- ========================================================================= -->
-<!-- MODAL 2: LOG ACTIVITY / SPEECH -->
-<!-- ========================================================================= -->
+<!-- LOG ACTIVITY MODAL -->
 <?php if ($activeChildId): ?>
 <div class="modal fade" id="logActivityModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header bg-success text-white border-0 rounded-top-4">
                 <h5 class="modal-title brand-font fw-bold"><i class="fa-solid fa-plus-circle me-2"></i>Log Practice Session</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="dashboard.php">
                 <div class="modal-body p-4">
@@ -736,7 +529,7 @@ function timeAgo($datetime) {
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Activity Type</label>
-                        <select name="activity_type" id="activityTypeSelect" class="form-select rounded-3" onchange="toggleSpeechFields()">
+                        <select name="activity_type" class="form-select rounded-3">
                             <option value="lesson">Lesson / Module</option>
                             <option value="speech">Speech Practice</option>
                             <option value="sensory">Sensory Relaxation</option>
@@ -751,37 +544,17 @@ function timeAgo($datetime) {
                     <div class="row g-3 mb-3">
                         <div class="col-6">
                             <label class="form-label fw-semibold small">Duration (Mins)</label>
-                            <input type="number" name="duration_minutes" class="form-control rounded-3" value="15" min="1" required>
+                            <input type="number" name="duration_minutes" class="form-control rounded-3" value="10" min="1" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label fw-semibold small">Stars Awarded</label>
-                            <input type="number" name="stars_earned" class="form-control rounded-3" value="3" min="0" max="5">
+                            <label class="form-label fw-semibold small">Stars Earned</label>
+                            <input type="number" name="stars_earned" class="form-control rounded-3" value="1" min="1" max="5" required>
                         </div>
                     </div>
-
-                    <!-- CONDITIONAL SPEECH FIELDS -->
-                    <div id="speechFieldsGroup" style="display: none;" class="p-3 bg-light rounded-3 border">
-                        <div class="fw-semibold text-success small mb-2"><i class="fa-solid fa-microphone me-1"></i> Speech Log Details</div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small">Target Word</label>
-                                <input type="text" name="target_word" class="form-control form-control-sm" placeholder="e.g. Apple">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small">Word Heard</label>
-                                <input type="text" name="heard_word" class="form-control form-control-sm" placeholder="e.g. Apple">
-                            </div>
-                            <div class="col-12 mt-2">
-                                <label class="form-label small">Clarity / Accuracy %</label>
-                                <input type="number" name="accuracy_score" class="form-control form-control-sm" value="85" min="0" max="100">
-                            </div>
-                        </div>
-                    </div>
-
                 </div>
                 <div class="modal-footer border-0 bg-light rounded-bottom-4">
                     <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success rounded-pill px-4"><i class="fa-solid fa-check me-1"></i> Save Entry</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4"><i class="fa-solid fa-check me-1"></i> Log Activity</button>
                 </div>
             </form>
         </div>
@@ -789,85 +562,6 @@ function timeAgo($datetime) {
 </div>
 <?php endif; ?>
 
-<!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-    // Toggle Speech specifics in Activity Modal
-    function toggleSpeechFields() {
-        const type = document.getElementById('activityTypeSelect').value;
-        const fields = document.getElementById('speechFieldsGroup');
-        fields.style.display = (type === 'speech') ? 'block' : 'none';
-    }
-
-    // Inject Dynamic PHP Data into Chart.js
-    const chartLabels = <?php echo json_encode($chartDays); ?>;
-    const speechData  = <?php echo json_encode($speechMinutesData); ?>;
-    const lessonData  = <?php echo json_encode($lessonMinutesData); ?>;
-    const sensoryData = <?php echo json_encode($sensoryMinutesData); ?>;
-
-    const ctx = document.getElementById('weeklyActivityChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: chartLabels,
-            datasets: [
-                {
-                    label: 'Speech Practice (Mins)',
-                    data: speechData,
-                    backgroundColor: '#16a34a',
-                    borderRadius: 6
-                },
-                {
-                    label: 'Lessons Completed (Mins)',
-                    data: lessonData,
-                    backgroundColor: '#2563eb',
-                    borderRadius: 6
-                },
-                {
-                    label: 'Sensory Relaxation (Mins)',
-                    data: sensoryData,
-                    backgroundColor: '#0d9488',
-                    borderRadius: 6
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { font: { family: 'Poppins', size: 12 } }
-                }
-            },
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, grid: { borderDash: [4, 4] } }
-            }
-        }
-    });
-
-    // CSV Export functionality
-    function exportToCSV() {
-        let csv = [];
-        let rows = document.querySelectorAll("#speechLogsTable tr");
-        
-        for (let i = 0; i < rows.length; i++) {
-            let row = [], cols = rows[i].querySelectorAll("td, th");
-            for (let j = 0; j < cols.length; j++) 
-                row.push('"' + cols[j].innerText.trim() + '"');
-            csv.push(row.join(","));        
-        }
-
-        let csvFile = new Blob([csv.join("\n")], {type: "text/csv"});
-        let downloadLink = document.createElement("a");
-        downloadLink.download = "Speech_Logs_Report.csv";
-        downloadLink.href = window.URL.createObjectURL(csvFile);
-        downloadLink.style.display = "none";
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-    }
-</script>
 </body>
 </html>

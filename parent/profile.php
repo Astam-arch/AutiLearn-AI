@@ -37,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email    = trim($_POST['email'] ?? '');
 
         if (!empty($fullName) && !empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            // Check if email belongs to another user
             $checkEmail = $pdo->prepare("SELECT id FROM users WHERE email = ? AND id != ? LIMIT 1");
             $checkEmail->execute([$email, $parentId]);
             
@@ -45,24 +44,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flashMessage = 'The email address is already taken by another account.';
                 $flashType    = 'danger';
             } else {
-                // Split full_name into first_name and last_name
                 $parts     = explode(' ', $fullName, 2);
                 $firstName = $parts[0] ?? '';
                 $lastName  = $parts[1] ?? '';
 
                 $updateParent = $pdo->prepare("UPDATE users SET first_name = ?, last_name = ?, full_name = ?, email = ? WHERE id = ?");
                 if ($updateParent->execute([$firstName, $lastName, $fullName, $email, $parentId])) {
-                    // Update session variables
                     $_SESSION['full_name']  = $fullName;
                     $_SESSION['first_name'] = $firstName;
                     $_SESSION['last_name']  = $lastName;
                     $_SESSION['email']      = $email;
 
-                    // Synchronize parent_email for linked children in users table
                     $syncChild = $pdo->prepare("UPDATE users SET parent_email = ? WHERE parent_id = ?");
                     $syncChild->execute([$email, $parentId]);
 
-                    $flashMessage = 'Profile information updated successfully!';
+                    $flashMessage = 'Parent profile information updated successfully!';
                     $flashType    = 'success';
                 } else {
                     $flashMessage = 'Failed to update profile information. Please try again.';
@@ -90,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flashMessage = 'New password must be at least 6 characters long.';
             $flashType    = 'warning';
         } else {
-            // Retrieve current password hash from DB
             $pwdStmt = $pdo->prepare("SELECT password FROM users WHERE id = ? LIMIT 1");
             $pwdStmt->execute([$parentId]);
             $userPwd = $pwdStmt->fetch(PDO::FETCH_ASSOC);
@@ -112,17 +107,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } 
-    // Action C: Update Child Learner Settings
+    // Action C: Update Individual Child Learner Settings & Preferences
     elseif ($action === 'update_child') {
-        $childId   = intval($_POST['child_id'] ?? 0);
-        $childName = trim($_POST['child_name'] ?? '');
+        $childId      = intval($_POST['child_id'] ?? 0);
+        $childName    = trim($_POST['child_name'] ?? '');
+        $speechRate   = $_POST['speech_rate'] ?? '0.85';
+        $learningPace = $_POST['learning_pace'] ?? 'intermediate';
 
         if ($childId > 0 && !empty($childName)) {
             $parts          = explode(' ', $childName, 2);
             $childFirstName = $parts[0] ?? '';
             $childLastName  = $parts[1] ?? '';
 
-            // Update child name in users table (ensuring child belongs to logged-in parent)
             $updateChild = $pdo->prepare("UPDATE users SET first_name = ?, last_name = ?, full_name = ? WHERE id = ? AND parent_id = ?");
             if ($updateChild->execute([$childFirstName, $childLastName, $childName, $childId, $parentId])) {
                 $flashMessage = 'Child learner settings updated successfully!';
@@ -132,11 +128,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flashType    = 'danger';
             }
         } else {
-            $flashMessage = 'Please select a valid student and enter a name.';
+            $flashMessage = 'Please enter a valid student display name.';
             $flashType    = 'warning';
         }
-    } 
-    // Action D: Notification Settings
+    }
+    // Action D: Remove / Unlink Child Account
+    elseif ($action === 'remove_child') {
+        $targetChildId = intval($_POST['child_id'] ?? 0);
+        if ($targetChildId > 0) {
+            // Unlink by setting parent_id to NULL or deleting, depending on system schema. Here we unlink/delete connection.
+            $deleteStmt = $pdo->prepare("UPDATE users SET parent_id = NULL, parent_email = NULL WHERE id = ? AND parent_id = ? AND role = 'student'");
+            if ($deleteStmt->execute([$targetChildId, $parentId])) {
+                $flashMessage = 'Student account successfully unlinked from your parent profile.';
+                $flashType    = 'success';
+            } else {
+                $flashMessage = 'Failed to remove child account. Please try again.';
+                $flashType    = 'danger';
+            }
+        }
+    }
+    // Action E: Notification Settings
     elseif ($action === 'update_notifications') {
         $flashMessage = 'Notification and report preferences saved!';
         $flashType    = 'info';
@@ -151,14 +162,10 @@ $parentUser = $parentStmt->fetch(PDO::FETCH_ASSOC);
 $parentName  = !empty($parentUser['full_name']) ? $parentUser['full_name'] : trim(($parentUser['first_name'] ?? '') . ' ' . ($parentUser['last_name'] ?? ''));
 $parentEmail = $parentUser['email'] ?? '';
 
-// 3. Fetch Linked Child Accounts from DB (where parent_id = current logged in parent)
+// 3. Fetch Linked Child Accounts from DB
 $childStmt = $pdo->prepare("SELECT id, first_name, last_name, full_name, email, created_at FROM users WHERE parent_id = ? AND role = 'student'");
 $childStmt->execute([$parentId]);
 $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Primary linked child data
-$primaryChild = $linkedChildren[0] ?? null;
-$primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $primaryChild['full_name'] : trim($primaryChild['first_name'] . ' ' . $primaryChild['last_name'])) : 'No Linked Child';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -284,7 +291,7 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
     <!-- PAGE TITLE HEADER -->
     <div class="mb-4">
         <h2 class="brand-font fw-bold text-dark fs-1 mb-1">Account & Settings</h2>
-        <p class="text-muted fs-5">Manage your parent account, child learner preferences, and notification reports.</p>
+        <p class="text-muted fs-5">Manage your parent account, multiple child learner profiles, and progress notification settings.</p>
     </div>
 
     <!-- FLASH FEEDBACK BANNER -->
@@ -297,7 +304,7 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
 
     <div class="row g-4">
         
-        <!-- SIDEBAR NAVIGATION TABS -->
+        <!-- SIDEBAR NAVIGATION -->
         <div class="col-lg-4">
             <div class="profile-card text-center mb-4">
                 <div class="avatar-circle">
@@ -308,8 +315,8 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
                 
                 <div class="border-top pt-3 text-start">
                     <div class="d-flex align-items-center justify-content-between text-muted small mb-2">
-                        <span><i class="fa-solid fa-child me-2 text-primary"></i>Linked Child:</span>
-                        <strong class="text-dark"><?php echo htmlspecialchars($primaryChildName); ?></strong>
+                        <span><i class="fa-solid fa-child me-2 text-primary"></i>Linked Children:</span>
+                        <strong class="text-dark"><?php echo count($linkedChildren); ?> Active</strong>
                     </div>
                     <div class="d-flex align-items-center justify-content-between text-muted small mb-2">
                         <span><i class="fa-solid fa-envelope me-2 text-primary"></i>Email:</span>
@@ -329,7 +336,7 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
                         <i class="fa-solid fa-user-pen me-2 fs-5"></i> Personal Information
                     </button>
                     <button class="nav-link mb-2" id="v-pills-child-tab" data-bs-toggle="pill" data-bs-target="#v-pills-child" type="button" role="tab">
-                        <i class="fa-solid fa-child-reaching me-2 fs-5"></i> Child Learner Profile
+                        <i class="fa-solid fa-child-reaching me-2 fs-5"></i> Child Learner Profiles
                     </button>
                     <button class="nav-link" id="v-pills-notifications-tab" data-bs-toggle="pill" data-bs-target="#v-pills-notifications" type="button" role="tab">
                         <i class="fa-solid fa-bell me-2 fs-5"></i> Progress Reports & Alerts
@@ -385,83 +392,98 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
                     </div>
                 </div>
 
-                <!-- TAB 2: CHILD LEARNER PROFILE & ACCESSIBILITY -->
+                <!-- TAB 2: MULTI-CHILD LEARNER PROFILES & MANAGEMENT -->
                 <div class="tab-pane fade" id="v-pills-child" role="tabpanel">
                     <div class="profile-card">
                         <div class="d-flex align-items-center justify-content-between mb-4 border-bottom pb-3">
-                            <h4 class="brand-font fw-bold text-dark m-0">Child Learner Settings</h4>
-                            <a href="add_child.php" class="btn btn-sm btn-outline-primary rounded-pill fw-semibold">
+                            <h4 class="brand-font fw-bold text-dark m-0">Linked Student Accounts</h4>
+                            <a href="add_child.php" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold">
                                 <i class="fa-solid fa-user-plus me-1"></i> Link Another Child
                             </a>
                         </div>
 
                         <?php if (empty($linkedChildren)): ?>
-                            <div class="alert alert-info rounded-4 text-center py-4">
-                                <i class="fa-solid fa-circle-info fs-3 d-block mb-2 text-primary"></i>
+                            <div class="alert alert-info rounded-4 text-center py-5">
+                                <i class="fa-solid fa-child-reaching fs-1 d-block mb-3 text-primary"></i>
                                 <h5>No child profiles linked yet</h5>
-                                <p class="text-muted small mb-3">Link your child's student account to view and manage their settings here.</p>
+                                <p class="text-muted small mb-3">Link student accounts to customize learning paces and track progress.</p>
                                 <a href="add_child.php" class="btn btn-primary rounded-pill px-4">Link Student Account</a>
                             </div>
                         <?php else: ?>
-                            <form action="" method="POST">
-                                <input type="hidden" name="action" value="update_child">
+                            <p class="text-muted small mb-3">Expand a child's card below to customize their name, speech preferences, or unlink the student account.</p>
+                            
+                            <div class="accordion" id="childAccordion">
+                                <?php foreach ($linkedChildren as $index => $child): ?>
+                                    <?php 
+                                        $cName = !empty($child['full_name']) ? $child['full_name'] : trim($child['first_name'] . ' ' . $child['last_name']);
+                                        $collapseId = "childCollapse_" . $child['id'];
+                                        $headingId = "childHeading_" . $child['id'];
+                                    ?>
+                                    <div class="accordion-item border rounded-4 mb-3 overflow-hidden shadow-sm">
+                                        <h2 class="accordion-header" id="<?php echo $headingId; ?>">
+                                            <button class="accordion-button <?php echo $index !== 0 ? 'collapsed' : ''; ?> fw-bold bg-white text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#<?php echo $collapseId; ?>" aria-expanded="<?php echo $index === 0 ? 'true' : 'false'; ?>" aria-controls="<?php echo $collapseId; ?>">
+                                                <i class="fa-solid fa-child text-primary me-2 fs-5"></i> <?php echo htmlspecialchars($cName); ?> 
+                                                <span class="ms-2 badge bg-light text-secondary border fw-normal small"><?php echo htmlspecialchars($child['email']); ?></span>
+                                            </button>
+                                        </h2>
+                                        <div id="<?php echo $collapseId; ?>" class="accordion-collapse collapse <?php echo $index === 0 ? 'show' : ''; ?>" aria-labelledby="<?php echo $headingId; ?>" data-bs-parent="#childAccordion">
+                                            <div class="accordion-body bg-white border-top p-4">
+                                                
+                                                <!-- Individual Child Update Form -->
+                                                <form action="" method="POST" class="mb-4">
+                                                    <input type="hidden" name="action" value="update_child">
+                                                    <input type="hidden" name="child_id" value="<?php echo $child['id']; ?>">
 
-                                <div class="row g-3">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Select Student Account</label>
-                                        <select name="child_id" class="form-select" id="childSelect" onchange="updateChildNameInput(this)">
-                                            <?php foreach ($linkedChildren as $child): ?>
-                                                <?php 
-                                                    $cName = !empty($child['full_name']) ? $child['full_name'] : trim($child['first_name'] . ' ' . $child['last_name']);
-                                                ?>
-                                                <option value="<?php echo $child['id']; ?>" data-name="<?php echo htmlspecialchars($cName); ?>">
-                                                    <?php echo htmlspecialchars($cName); ?> (<?php echo htmlspecialchars($child['email']); ?>)
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <label class="form-label">Student Name</label>
+                                                            <input type="text" name="child_name" class="form-control" value="<?php echo htmlspecialchars($cName); ?>" required>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label">Speech Lab Voice Speed</label>
+                                                            <select name="speech_rate" class="form-select">
+                                                                <option value="0.75">0.75x (Slower & Clear)</option>
+                                                                <option value="0.85" selected>0.85x (Recommended Natural)</option>
+                                                                <option value="1.0">1.0x (Standard Normal Speed)</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-12">
+                                                            <label class="form-label">Learning Pace & Difficulty</label>
+                                                            <select name="learning_pace" class="form-select">
+                                                                <option value="beginner">Beginner (Gentle Repetition & Basic Vocabulary)</option>
+                                                                <option value="intermediate" selected>Intermediate (Balanced Interactive Modules)</option>
+                                                                <option value="advanced">Advanced (Accelerated Sentence Building)</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label">Child's Display Name</label>
-                                        <input type="text" name="child_name" id="child_name_input" class="form-control" value="<?php echo htmlspecialchars($primaryChildName); ?>" required>
-                                    </div>
+                                                    <div class="mt-3 text-end">
+                                                        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">
+                                                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Child Settings
+                                                        </button>
+                                                    </div>
+                                                </form>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label">AI Voice Speed (Speech Lab)</label>
-                                        <select name="speech_rate" class="form-select">
-                                            <option value="0.75">0.75x (Slower & Very Clear)</option>
-                                            <option value="0.85" selected>0.85x (Recommended Natural)</option>
-                                            <option value="1.0">1.0x (Standard Normal Speed)</option>
-                                        </select>
-                                    </div>
+                                                <!-- Unlink / Remove Child Section -->
+                                                <div class="border-top pt-3 d-flex align-items-center justify-content-between bg-light p-3 rounded-3">
+                                                    <div>
+                                                        <span class="text-danger fw-semibold small d-block"><i class="fa-solid fa-triangle-exclamation me-1"></i> Danger Zone</span>
+                                                        <span class="text-muted small">Unlinking removes this student account from your parent view dashboard.</span>
+                                                    </div>
+                                                    <form action="" method="POST" onsubmit="return confirm('Are you sure you want to unlink <?php echo htmlspecialchars($cName); ?> from your account?');">
+                                                        <input type="hidden" name="action" value="remove_child">
+                                                        <input type="hidden" name="child_id" value="<?php echo $child['id']; ?>">
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold">
+                                                            <i class="fa-solid fa-user-minus me-1"></i> Remove Child
+                                                        </button>
+                                                    </form>
+                                                </div>
 
-                                    <div class="col-12 mt-4">
-                                        <h5 class="brand-font fw-bold text-dark mb-3"><i class="fa-solid fa-eye text-primary me-2"></i>Sensory & Visual Preferences</h5>
-                                        
-                                        <div class="form-check form-switch mb-3">
-                                            <input class="form-check-input" type="checkbox" role="switch" id="reducedMotion" checked>
-                                            <label class="form-check-label fw-semibold text-dark" for="reducedMotion">
-                                                Enable Reduced Motion & Soft Transitions
-                                            </label>
-                                            <div class="small text-muted">Minimizes flashing animations across games and sensory modules.</div>
+                                            </div>
                                         </div>
-
-                                        <div class="form-check form-switch mb-3">
-                                            <input class="form-check-input" type="checkbox" role="switch" id="autoAudioFeedback" checked>
-                                            <label class="form-check-label fw-semibold text-dark" for="autoAudioFeedback">
-                                                Auto-read word cards aloud on tap
-                                            </label>
-                                            <div class="small text-muted">Plays natural audio pronunciation whenever visual cards are selected.</div>
-                                        </div>
                                     </div>
-                                </div>
-
-                                <div class="mt-4 pt-3 border-top text-end">
-                                    <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold">
-                                        <i class="fa-solid fa-floppy-disk me-2"></i> Save Child Profile
-                                    </button>
-                                </div>
-                            </form>
+                                <?php endforeach; ?>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -553,18 +575,7 @@ $primaryChildName = $primaryChild ? (!empty($primaryChild['full_name']) ? $prima
     </div>
 </div>
 
-<!-- Bootstrap 5 JS -->
+<!-- Bootstrap 5 JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-function updateChildNameInput(selectElem) {
-    const selectedOption = selectElem.options[selectElem.selectedIndex];
-    const name = selectedOption.getAttribute('data-name');
-    const input = document.getElementById('child_name_input');
-    if (input && name) {
-        input.value = name;
-    }
-}
-</script>
 </body>
 </html>
