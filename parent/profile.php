@@ -18,6 +18,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'parent' && $_SESSION['rol
 }
 
 $parentId     = $_SESSION['user_id'];
+$parentEmail  = $_SESSION['email'] ?? '';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'parent/dashboard.php' : 'dashboard.php';
 $logoutUrl    = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
 
@@ -132,11 +133,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flashType    = 'warning';
         }
     }
-    // Action D: Remove / Unlink Child Account
+    // Action D: Link Existing Student Account by Email
+    elseif ($action === 'add_child') {
+        $childEmail = trim($_POST['child_email'] ?? '');
+
+        if (!empty($childEmail) && filter_var($childEmail, FILTER_VALIDATE_EMAIL)) {
+            // Find user with student role and matching email
+            $findStudent = $pdo->prepare("SELECT id, role, parent_id, full_name, first_name, last_name FROM users WHERE email = ? LIMIT 1");
+            $findStudent->execute([$childEmail]);
+            $studentUser = $findStudent->fetch(PDO::FETCH_ASSOC);
+
+            if (!$studentUser) {
+                $flashMessage = 'No user account found with this email address. Please make sure the student account has been registered first.';
+                $flashType    = 'danger';
+            } elseif ($studentUser['role'] !== 'student') {
+                $flashMessage = 'The account associated with this email is not a student account.';
+                $flashType    = 'danger';
+            } elseif (!empty($studentUser['parent_id']) && intval($studentUser['parent_id']) === intval($parentId)) {
+                $flashMessage = 'This student account is already linked to your parent profile.';
+                $flashType    = 'warning';
+            } elseif (!empty($studentUser['parent_id'])) {
+                $flashMessage = 'This student account is already linked to another parent.';
+                $flashType    = 'danger';
+            } else {
+                // Link the student account to this parent
+                $linkStmt = $pdo->prepare("UPDATE users SET parent_id = ?, parent_email = ? WHERE id = ?");
+                if ($linkStmt->execute([$parentId, $parentEmail, $studentUser['id']])) {
+                    $sName = !empty($studentUser['full_name']) ? $studentUser['full_name'] : trim($studentUser['first_name'] . ' ' . $studentUser['last_name']);
+                    $flashMessage = 'Student account (' . htmlspecialchars($sName) . ') successfully linked to your profile!';
+                    $flashType    = 'success';
+                } else {
+                    $flashMessage = 'Failed to link student account. Please try again.';
+                    $flashType    = 'danger';
+                }
+            }
+        } else {
+            $flashMessage = 'Please enter a valid student email address.';
+            $flashType    = 'warning';
+        }
+    }
+    // Action E: Remove / Unlink Child Account
     elseif ($action === 'remove_child') {
         $targetChildId = intval($_POST['child_id'] ?? 0);
         if ($targetChildId > 0) {
-            // Unlink by setting parent_id to NULL or deleting, depending on system schema. Here we unlink/delete connection.
             $deleteStmt = $pdo->prepare("UPDATE users SET parent_id = NULL, parent_email = NULL WHERE id = ? AND parent_id = ? AND role = 'student'");
             if ($deleteStmt->execute([$targetChildId, $parentId])) {
                 $flashMessage = 'Student account successfully unlinked from your parent profile.';
@@ -147,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    // Action E: Notification Settings
+    // Action F: Notification Settings
     elseif ($action === 'update_notifications') {
         $flashMessage = 'Notification and report preferences saved!';
         $flashType    = 'info';
@@ -172,7 +211,7 @@ $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent & Child Profile Settings | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Parent & Child Profile Settings | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -273,7 +312,7 @@ $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="container">
         <a class="navbar-brand brand-font fs-3 text-primary d-flex align-items-center gap-2" href="<?php echo htmlspecialchars($dashboardUrl); ?>">
             <i class="fa-solid fa-arrow-left fs-4 me-1 text-secondary"></i>
-            <i class="fa-solid fa-chart-line text-primary fs-2"></i> AutiLearn <span class="fs-5 text-secondary">Parent Portal</span>
+            <i class="fa-solid fa-chart-line text-primary fs-2"></i> Spark Steps <span class="fs-5 text-secondary">Parent Portal</span>
         </a>
         <div class="d-flex align-items-center gap-3">
             <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="btn btn-outline-primary rounded-pill px-3 btn-sm fw-semibold">
@@ -397,17 +436,17 @@ $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="profile-card">
                         <div class="d-flex align-items-center justify-content-between mb-4 border-bottom pb-3">
                             <h4 class="brand-font fw-bold text-dark m-0">Linked Student Accounts</h4>
-                            <a href="add_child.php" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold">
-                                <i class="fa-solid fa-user-plus me-1"></i> Link Another Child
-                            </a>
+                            <button type="button" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" data-bs-toggle="modal" data-bs-target="#addChildModal">
+                                <i class="fa-solid fa-user-plus me-1"></i> Link Existing Student
+                            </button>
                         </div>
 
                         <?php if (empty($linkedChildren)): ?>
                             <div class="alert alert-info rounded-4 text-center py-5">
                                 <i class="fa-solid fa-child-reaching fs-1 d-block mb-3 text-primary"></i>
                                 <h5>No child profiles linked yet</h5>
-                                <p class="text-muted small mb-3">Link student accounts to customize learning paces and track progress.</p>
-                                <a href="add_child.php" class="btn btn-primary rounded-pill px-4">Link Student Account</a>
+                                <p class="text-muted small mb-3">Link existing student accounts by their email address to customize learning paces and track progress.</p>
+                                <button type="button" class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addChildModal">Link Student Account</button>
                             </div>
                         <?php else: ?>
                             <p class="text-muted small mb-3">Expand a child's card below to customize their name, speech preferences, or unlink the student account.</p>
@@ -566,8 +605,8 @@ $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
                         <label class="form-label">Confirm New Password</label>
                         <input type="password" name="confirm_password" class="form-control" required placeholder="Re-enter new password">
                     </div>
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary rounded-pill fw-bold py-2">Update Password</button>
+                    <div class="mt-4 text-end">
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold w-100">Update Password</button>
                     </div>
                 </form>
             </div>
@@ -575,7 +614,33 @@ $linkedChildren = $childStmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-<!-- Bootstrap 5 JS Bundle -->
+<!-- LINK EXISTING STUDENT MODAL -->
+<div class="modal fade" id="addChildModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 p-3 border-0">
+            <div class="modal-header border-0">
+                <h4 class="brand-font fw-bold text-dark m-0"><i class="fa-solid fa-user-plus text-primary me-2"></i>Link Existing Student Account</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form action="" method="POST">
+                    <input type="hidden" name="action" value="add_child">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Student Email Address</label>
+                        <input type="email" name="child_email" class="form-control" required placeholder="Enter the student's registered email">
+                        <div class="form-text">The student account must already be registered in the system. Linking will connect their learning data to your parent dashboard.</div>
+                    </div>
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold w-100">Link Student Account</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap 5 JS Bundle CDN -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
