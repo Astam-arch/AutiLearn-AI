@@ -1,5 +1,6 @@
 <?php
 // teacher/speech_logs.php
+session_start();
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
@@ -20,72 +21,70 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'teacher') {
 $teacherName = $_SESSION['full_name'] ?? 'Instructor';
 $logoutUrl = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'teacher/dashboard.php' : 'dashboard.php';
+$studentsUrl = defined('BASE_URL') ? BASE_URL . 'teacher/students.php' : 'students.php';
 
-$logs = [];
+$speechLogs = [];
 $searchQuery = trim($_GET['search'] ?? '');
 $dbError = null;
 
 try {
     if (isset($pdo)) {
-        // Automatically create or update the speech_logs table structure safely with all required columns
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS speech_logs (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                transcript TEXT NOT NULL,
-                confidence_score DECIMAL(5,2) DEFAULT 0.00,
-                status VARCHAR(50) DEFAULT 'Completed',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
+        // Fetch table columns for speech_logs to safely check schema
+        $columnsStmt = $pdo->query("SHOW COLUMNS FROM speech_logs");
+        $tableColumns = $columnsStmt->fetchAll(PDO::FETCH_COLUMN);
 
-        // Safely check and add 'confidence_score' column if it's missing in an existing table structure
-        $checkCol = $pdo->query("SHOW COLUMNS FROM speech_logs LIKE 'confidence_score'");
-        if ($checkCol->rowCount() == 0) {
-            $pdo->exec("ALTER TABLE speech_logs ADD COLUMN confidence_score DECIMAL(5,2) DEFAULT 0.00 AFTER transcript");
+        // Strictly identify the correct foreign key linking speech_logs to users (user_id or student_id)
+        $fkCol = 'user_id';
+        if (in_array('student_id', $tableColumns)) {
+            $fkCol = 'student_id';
+        } elseif (in_array('user_id', $tableColumns)) {
+            $fkCol = 'user_id';
         }
 
-        // Fetch speech logs joining with users table safely
+        // Build robust query joining speech_logs with users table
         $sql = "
-            SELECT l.id, 
-                   l.user_id, 
-                   l.transcript, 
-                   l.confidence_score, 
-                   l.status, 
-                   l.created_at,
-                   u.first_name, 
-                   u.last_name, 
-                   u.full_name, 
-                   u.email
-            FROM speech_logs l
-            JOIN users u ON l.user_id = u.id
+            SELECT sl.*, 
+                   COALESCE(u.full_name, CONCAT(u.first_name, ' ', u.last_name), CONCAT('User #', sl.{$fkCol})) AS student_full_name,
+                   u.first_name AS student_first_name, 
+                   u.last_name AS student_last_name, 
+                   COALESCE(u.email, 'No email linked') AS student_email,
+                   u.role AS user_role
+            FROM speech_logs sl
+            LEFT JOIN users u ON sl.{$fkCol} = u.id
+            WHERE 1=1
         ";
 
         $params = [];
 
         if (!empty($searchQuery)) {
-            $sql .= " WHERE (u.email LIKE :s_email OR u.full_name LIKE :s_fullname OR u.first_name LIKE :s_firstname OR u.last_name LIKE :s_lastname OR l.transcript LIKE :s_transcript)";
-            $searchTerm = '%' . $searchQuery . '%';
-            $params = [
-                's_email' => $searchTerm,
-                's_fullname' => $searchTerm,
-                's_firstname' => $searchTerm,
-                's_lastname' => $searchTerm,
-                's_transcript' => $searchTerm
-            ];
+            $sql .= " AND (
+                u.full_name LIKE :s_query 
+                OR u.email LIKE :s_query 
+                OR u.first_name LIKE :s_query 
+                OR u.last_name LIKE :s_query";
+            
+            foreach (['target_word', 'phrase', 'transcript', 'spoken_text', 'text', 'word'] as $col) {
+                if (in_array($col, $tableColumns)) {
+                    $sql .= " OR sl.{$col} LIKE :s_query";
+                }
+            }
+
+            $sql .= ")";
+            $params['s_query'] = '%' . $searchQuery . '%';
         }
 
-        $sql .= " ORDER BY l.created_at DESC";
+        $sql .= " ORDER BY sl.id DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
-        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $speechLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
     } else {
         $dbError = "Database connection object (\$pdo) is not initialized.";
     }
 } catch (PDOException $e) {
-    $dbError = "Database Query Error: " . $e->getMessage();
-    error_log($dbError);
+    $dbError = "Speech logs error: " . $e->getMessage();
+    $speechLogs = [];
 }
 ?>
 <!DOCTYPE html>
@@ -93,7 +92,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Speech Lab Logs | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Speech Logs & Exercises | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -146,13 +145,6 @@ try {
             padding: 14px 16px;
             vertical-align: middle;
         }
-
-        .search-hint {
-            font-size: 0.75rem;
-            color: #64748b;
-            margin-top: 6px;
-            display: block;
-        }
     </style>
 </head>
 <body>
@@ -165,10 +157,10 @@ try {
         </a>
         <div class="d-flex align-items-center gap-3">
             <a href="students.php" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
-                <i class="fa-solid fa-users me-1"></i> Students
+                <i class="fa-solid fa-users me-1"></i> Users Directory
             </a>
             <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
-                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+                <i class="fa-solid fa-house me-1"></i> Dashboard
             </a>
             <a href="<?php echo htmlspecialchars($logoutUrl); ?>" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold">
                 <i class="fa-solid fa-right-from-bracket me-1"></i> Logout
@@ -185,45 +177,42 @@ try {
             <div class="p-4 p-md-5 rounded-4 bg-white border border-success-subtle shadow-sm d-md-flex align-items-center justify-content-between">
                 <div>
                     <span class="badge bg-success-subtle text-success rounded-pill px-3 py-2 fw-semibold fs-6 mb-2">
-                        <i class="fa-solid fa-microphone-lines me-1"></i> Speech Monitoring
+                        <i class="fa-solid fa-microphone-lines me-1"></i> AI Speech Monitoring
                     </span>
-                    <h1 class="brand-font text-success mb-1">Student Speech Activity Logs</h1>
-                    <p class="text-secondary mb-0">Inspect real-time student speech transcripts, confidence scores, and lab session tracking data.</p>
+                    <h1 class="brand-font text-success mb-1">Student Speech & Exercise Logs</h1>
+                    <p class="text-secondary mb-0">Review actual pronunciation practice attempts, error flags, transcripts, and audio recordings from your registered users.</p>
                 </div>
                 <div class="mt-3 mt-md-0">
                     <span class="badge bg-light text-dark p-3 rounded-4 border fs-6">
-                        <i class="fa-solid fa-file-waveform text-success me-2"></i> Total Logs: <?php echo count($logs); ?>
+                        <i class="fa-solid fa-file-waveform text-success me-2"></i> Total Logs: <?php echo count($speechLogs); ?>
                     </span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- DATABASE ERROR NOTIFICATION -->
+    <!-- DATABASE NOTICE -->
     <?php if ($dbError): ?>
-        <div class="alert alert-danger rounded-4 shadow-sm mb-4" role="alert">
-            <i class="fa-solid fa-triangle-exclamation me-2"></i> <strong>System Notice:</strong> <?php echo htmlspecialchars($dbError); ?>
+        <div class="alert alert-warning rounded-4 shadow-sm mb-4" role="alert">
+            <i class="fa-solid fa-circle-exclamation me-2"></i> <strong>Database Notice:</strong> <?php echo htmlspecialchars($dbError); ?>
         </div>
     <?php endif; ?>
 
-    <!-- SMART SEARCH BAR -->
+    <!-- SEARCH & FILTER BAR -->
     <div class="dashboard-section py-4 mb-4">
         <form method="GET" action="" class="row g-3 align-items-center">
             <div class="col-lg-9">
                 <div class="input-group">
                     <span class="input-group-text bg-light border-end-0 text-success ps-3"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0 ps-2 shadow-none py-2" placeholder="Search by student email, name, or speech transcript keyword..." value="<?php echo htmlspecialchars($searchQuery); ?>">
+                    <input type="text" name="search" class="form-control border-start-0 ps-2 shadow-none py-2" placeholder="Search by student name, email, target word, or transcript..." value="<?php echo htmlspecialchars($searchQuery); ?>">
                 </div>
-                <span class="search-hint">
-                    <i class="fa-solid fa-lightbulb text-warning me-1"></i> Tip: Enter student email fragments or words spoken in speech activities to filter results.
-                </span>
             </div>
             <div class="col-lg-3 d-flex gap-2">
                 <button type="submit" class="btn btn-success flex-grow-1 fw-semibold rounded-pill py-2">
-                    <i class="fa-solid fa-filter me-1"></i> Filter Logs
+                    <i class="fa-solid fa-filter me-1"></i> Search Logs
                 </button>
                 <?php if (!empty($searchQuery)): ?>
-                    <a href="speech_logs.php" class="btn btn-outline-secondary rounded-pill py-2 px-3" title="Clear Filter">
+                    <a href="speech_logs.php" class="btn btn-outline-secondary rounded-pill py-2 px-3" title="Reset Search">
                         <i class="fa-solid fa-rotate-right"></i>
                     </a>
                 <?php endif; ?>
@@ -235,11 +224,11 @@ try {
     <div class="dashboard-section">
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-4">
             <h4 class="fw-bold text-dark mb-0 brand-font">
-                <i class="fa-solid fa-wave-square text-success me-2"></i>Recorded Speech Sessions
+                <i class="fa-solid fa-list-check text-success me-2"></i>Recorded Practice History
             </h4>
             <?php if (!empty($searchQuery)): ?>
                 <span class="badge bg-primary-subtle text-primary px-3 py-2 rounded-pill fw-semibold">
-                    Active Query: "<?php echo htmlspecialchars($searchQuery); ?>"
+                    Search filter applied: "<?php echo htmlspecialchars($searchQuery); ?>"
                 </span>
             <?php endif; ?>
         </div>
@@ -248,68 +237,109 @@ try {
             <table class="table table-custom align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Student Details</th>
-                        <th>Speech Transcript</th>
-                        <th>Confidence Score</th>
-                        <th>Timestamp</th>
-                        <th class="text-end">Action</th>
+                        <th>Student</th>
+                        <th>Target Word</th>
+                        <th>Student Transcript</th>
+                        <th>Status / Mistake Check</th>
+                        <th>Audio Recording</th>
+                        <th class="text-end">Timestamp</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($logs)): ?>
+                    <?php if (empty($speechLogs)): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted">
+                            <td colspan="6" class="text-center py-5 text-muted">
                                 <div class="py-3">
                                     <i class="fa-solid fa-microphone-slash text-secondary fs-2 mb-2 d-block"></i>
                                     <h5 class="fw-bold text-dark">No speech logs found</h5>
-                                    <p class="small mb-0">No records match your query "<strong><?php echo htmlspecialchars($searchQuery); ?></strong>".</p>
+                                    <p class="small mb-0">No practice records currently exist in your database table.</p>
                                 </div>
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($logs as $log): ?>
+                        <?php foreach ($speechLogs as $log): ?>
                             <?php 
-                                $studentName = trim($log['full_name'] ?? '');
-                                if (empty($studentName)) {
-                                    $studentName = trim(($log['first_name'] ?? '') . ' ' . ($log['last_name'] ?? ''));
-                                }
-                                if (empty($studentName)) {
-                                    $studentName = 'Student #' . $log['user_id'];
+                                // Resolve real student name and email from users table
+                                $studentName = trim($log['student_full_name'] ?? '');
+                                if (empty($studentName) || strpos($studentName, 'User #') === 0) {
+                                    $fName = trim($log['student_first_name'] ?? '');
+                                    $lName = trim($log['student_last_name'] ?? '');
+                                    if (!empty($fName) || !empty($lName)) {
+                                        $studentName = trim($fName . ' ' . $lName);
+                                    } else {
+                                        $studentName = 'Registered Student (ID #' . ($log[$fkCol] ?? 'N/A') . ')';
+                                    }
                                 }
 
-                                $score = floatval($log['confidence_score'] ?? 0);
+                                $studentEmail = trim($log['student_email'] ?? 'No email linked');
+
+                                $targetWord = trim($log['target_word'] ?? $log['phrase'] ?? $log['word'] ?? 'N/A');
+                                $transcript = trim($log['transcript'] ?? $log['spoken_text'] ?? $log['text'] ?? $log['spoken_word'] ?? '');
+                                $score = $log['score'] ?? $log['accuracy'] ?? null;
+
+                                // Handle empty transcripts cleanly
+                                $displayTranscript = !empty($transcript) ? $transcript : '<span class="text-muted fst-italic">No transcript captured</span>';
+
+                                // Automatic mistake comparison: check score or string mismatch
+                                $hasMistake = false;
+                                if (empty($transcript) || (is_numeric($score) && $score < 80)) {
+                                    $hasMistake = true;
+                                } elseif (!empty($targetWord) && !empty($transcript) && strcasecmp($targetWord, $transcript) !== 0) {
+                                    $hasMistake = true;
+                                }
+
+                                $audioFile = $log['audio_path'] ?? $log['file_path'] ?? $log['audio_url'] ?? $log['recording'] ?? '';
                             ?>
                             <tr>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 38px; height: 38px; font-size: 0.9rem;">
+                                        <div class="bg-success-subtle text-success rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px; font-size: 0.95rem;">
                                             <?php echo strtoupper(substr($studentName, 0, 1)); ?>
                                         </div>
                                         <div>
-                                            <span class="fw-semibold text-dark d-block"><?php echo htmlspecialchars($studentName); ?></span>
-                                            <small class="text-secondary" style="font-size: 0.75rem;"><?php echo htmlspecialchars($log['email'] ?? ''); ?></small>
+                                            <a href="students.php" class="fw-semibold text-dark text-decoration-none d-block">
+                                                <?php echo htmlspecialchars($studentName); ?>
+                                            </a>
+                                            <small class="text-muted" style="font-size: 0.75rem;"><?php echo htmlspecialchars($studentEmail); ?></small>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="text-dark fst-italic" style="max-width: 350px; display: inline-block;">
-                                        "<?php echo htmlspecialchars($log['transcript']); ?>"
+                                    <span class="badge bg-light text-success border fw-bold px-3 py-2 fs-6">
+                                        <?php echo htmlspecialchars($targetWord); ?>
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-success-subtle text-success fw-bold px-3 py-2">
-                                        <?php echo number_format($score, 1); ?>% Accuracy
+                                    <span class="<?php echo $hasMistake ? 'text-danger fw-semibold' : 'text-success fw-medium'; ?>">
+                                        <?php echo $displayTranscript; ?>
                                     </span>
                                 </td>
                                 <td>
+                                    <?php if ($hasMistake): ?>
+                                        <span class="badge bg-danger-subtle text-danger fw-bold px-3 py-2 rounded-pill">
+                                            <i class="fa-solid fa-triangle-exclamation me-1"></i> Mistake / Mismatch
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-success-subtle text-success fw-bold px-3 py-2 rounded-pill">
+                                            <i class="fa-solid fa-check me-1"></i> Correct / Match
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (!empty($audioFile)): ?>
+                                        <audio controls class="custom-audio" style="height: 36px; width: 180px;">
+                                            <source src="<?php echo htmlspecialchars($audioFile); ?>" type="audio/webm">
+                                            <source src="<?php echo htmlspecialchars($audioFile); ?>" type="audio/mp3">
+                                            Your browser does not support audio.
+                                        </audio>
+                                    <?php else: ?>
+                                        <span class="text-muted small fst-italic">No audio recorded</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
                                     <span class="badge bg-light text-dark fw-semibold px-2 py-1 border">
                                         <?php echo !empty($log['created_at']) ? date('M j, Y, g:i a', strtotime($log['created_at'])) : 'N/A'; ?>
                                     </span>
-                                </td>
-                                <td class="text-end">
-                                    <a href="student_profile.php?id=<?php echo $log['user_id']; ?>" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold">
-                                        <i class="fa-solid fa-eye me-1"></i> Profile
-                                    </a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
