@@ -2,6 +2,7 @@
 // student/grammer.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -29,14 +30,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if ($score !== false && $total !== false && $total > 0) {
         $percentage = round(($score / $total) * 100);
         try {
-            $stmt = $pdo->prepare("INSERT INTO student_progress (user_id, activity_type, score, total_items, percentage, updated_at) VALUES (?, 'grammar_quiz', ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE score = VALUES(score), total_items = VALUES(total_items), percentage = VALUES(percentage), updated_at = NOW()");
-            $stmt->execute([$userId, $score, $total, $percentage]);
-            echo json_encode(['status' => 'success', 'message' => 'Progress saved successfully.']);
+            $lessonTitle = "Grammar Mastery Quiz";
+            $moduleTitle = "Grammar & Sentence Structure";
+
+            // Keep the lesson completion record used by existing reports.
+            $checkProg = $pdo->prepare("SELECT id FROM user_progress WHERE user_id = ? AND lesson_title = ? LIMIT 1");
+            $checkProg->execute([$userId, $lessonTitle]);
+            if ($checkProg->fetch()) {
+                $upd = $pdo->prepare("UPDATE user_progress SET status = 'completed', is_completed = 1, updated_at = NOW() WHERE user_id = ? AND lesson_title = ?");
+                $upd->execute([$userId, $lessonTitle]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO user_progress (user_id, lesson_title, module_title, status, is_completed, created_at, updated_at) VALUES (?, ?, ?, 'completed', 1, NOW(), NOW())");
+                $ins->execute([$userId, $lessonTitle, $moduleTitle]);
+            }
+
+            $starsEarned = ($percentage >= 80) ? 3 : (($percentage >= 50) ? 2 : 1);
+            $durationMins = 5;
+            $description = "Completed Grammar Quiz with score {$score}/{$total} ({$percentage}%)";
+            recordStudentActivity($pdo, (int)$userId, 'grammar', $lessonTitle, $description, $durationMins, $starsEarned, 'fa-puzzle-piece', '#16a34a');
+
+            $starUpd = $pdo->prepare("UPDATE users SET stars = COALESCE(stars, 0) + ? WHERE id = ?");
+            $starUpd->execute([$starsEarned, $userId]);
+
+            echo json_encode(['status' => 'success', 'message' => 'Progress and telemetry successfully saved!']);
         } catch (Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => 'Database error.']);
+            echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
         }
     } else {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid data.']);
+        echo json_encode(['status' => 'error', 'message' => 'Invalid data submitted.']);
     }
     exit;
 }

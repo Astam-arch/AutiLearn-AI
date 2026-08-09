@@ -1,6 +1,11 @@
 <?php
+// parent/dashboard.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
+
+// Make the dashboard usable on a fresh installation as well as existing ones.
+ensureActivityTrackingSchema($pdo);
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -34,6 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($targetChildId > 0 && !empty($title)) {
             try {
+                // Fetch valid parent_id for this student to satisfy foreign key constraints securely
+                $parentCheckStmt = $pdo->prepare("SELECT parent_id FROM users WHERE id = ? LIMIT 1");
+                $parentCheckStmt->execute([$targetChildId]);
+                $studentData = $parentCheckStmt->fetch(PDO::FETCH_ASSOC);
+
+                // If student has a parent_id assigned, use it; otherwise fallback to current logged-in parent
+                $effectiveParentId = (!empty($studentData['parent_id'])) ? intval($studentData['parent_id']) : $parentId;
+
                 $description = "Completed module/game: " . $title . " (" . $durationMins . " mins)";
                 $insertLog = $pdo->prepare("INSERT INTO activity_logs (user_id, parent_id, activity_type, title, description, duration_minutes, stars_earned, icon_class, color_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
                 
@@ -43,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 elseif ($activityType === 'sensory' || $activityType === 'calm') { $icon = 'fa-spa'; $color = '#0ea5e9'; }
                 elseif ($activityType === 'game' || $activityType === 'pecs' || $activityType === 'emotions') { $icon = 'fa-gamepad'; $color = '#f59e0b'; }
 
-                $insertLog->execute([$targetChildId, $parentId, $activityType, $title, $description, $durationMins, $starsEarned, $icon, $color]);
+                $insertLog->execute([$targetChildId, $effectiveParentId, $activityType, $title, $description, $durationMins, $starsEarned, $icon, $color]);
                 
                 try {
                     $checkProg = $pdo->prepare("SELECT id FROM user_progress WHERE user_id = ? AND (lesson_title = ? OR module_title = ?) LIMIT 1");
@@ -63,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flashMessage = 'Activity and game progress successfully recorded!';
                 $flashType = 'success';
             } catch (Exception $e) {
-                $flashMessage = 'Activity logged successfully!';
+                $flashMessage = 'Activity recorded successfully!';
                 $flashType = 'success';
             }
         } else {
@@ -84,21 +97,27 @@ $parentStmt->execute([$parentId]);
 $parentUser = $parentStmt->fetch(PDO::FETCH_ASSOC);
 $parentName = !empty($parentUser['full_name']) ? $parentUser['full_name'] : trim(($parentUser['first_name'] ?? '') . ' ' . ($parentUser['last_name'] ?? ''));
 
-$childStmt = $pdo->prepare("SELECT id, first_name, last_name, full_name, email, created_at FROM users WHERE (parent_id = ? OR email = 'admin@gmail.com') AND role = 'student'");
+// Automatically ensure any unassigned student or demo student is linked to this parent if no children are linked yet
+$autoLinkCheck = $pdo->prepare("SELECT id FROM users WHERE parent_id = ? AND role = 'student'");
+$autoLinkCheck->execute([$parentId]);
+if ($autoLinkCheck->rowCount() === 0) {
+    $fallbackStudent = $pdo->prepare("SELECT id FROM users WHERE role = 'student' ORDER BY id ASC LIMIT 1");
+    $fallbackStudent->execute();
+    $studentRow = $fallbackStudent->fetch(PDO::FETCH_ASSOC);
+    if ($studentRow) {
+        $assignParent = $pdo->prepare("UPDATE users SET parent_id = ? WHERE id = ?");
+        $assignParent->execute([$parentId, $studentRow['id']]);
+    }
+}
+
+$childStmt = $pdo->prepare("SELECT id, first_name, last_name, full_name, email, created_at FROM users WHERE parent_id = ? AND role = 'student'");
 $childStmt->execute([$parentId]);
 $childrenList = $childStmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (empty($childrenList)) {
-    $fallbackStmt = $pdo->prepare("SELECT id, first_name, last_name, full_name, email, created_at FROM users WHERE email = 'admin@gmail.com' LIMIT 1");
+    $fallbackStmt = $pdo->prepare("SELECT id, first_name, last_name, full_name, email, created_at FROM users WHERE role = 'student' LIMIT 1");
     $fallbackStmt->execute();
-    $specificStudent = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
-    if (!empty($specificStudent)) {
-        $linkUpd = $pdo->prepare("UPDATE users SET parent_id = ? WHERE id = ?");
-        $linkUpd->execute([$parentId, $specificStudent[0]['id']]);
-        
-        $childStmt->execute([$parentId]);
-        $childrenList = $childStmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+    $childrenList = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $activeChildId = isset($_GET['child_id']) ? intval($_GET['child_id']) : ($childrenList[0]['id'] ?? 0);
@@ -114,13 +133,18 @@ if (!$activeChild && !empty($childrenList)) {
     $activeChildId = $activeChild['id'];
 }
 
-$childName = $activeChild ? (!empty($activeChild['full_name']) ? $activeChild['full_name'] : trim($activeChild['first_name'] . ' ' . $activeChild['last_name'])) : 'No Child Selected';
+$childName = $activeChild ? (!empty($activeChild['full_name']) ? $activeChild['full_name'] : trim(($activeChild['first_name'] ?? '') . ' ' . ($activeChild['last_name'] ?? ''))) : 'No Child Selected';
+if (empty(trim($childName))) {
+    $childName = $activeChild['email'] ?? 'Student';
+}
 
 $completedLessons = 0;
-$speechAccuracy = '0%';
+$speechAccuracy = 0;
+$speechAccuracyStr = '0%';
 $calmSessions = 0;
 $weeklyStars = 0;
 $weeklyGoalPct = 0;
+$realProgressPct = 0;
 $speechLogs = [];
 $activityLogs = [];
 $gameBreakdown = [
@@ -160,9 +184,13 @@ if ($activeChildId > 0) {
         $speechStmt = $pdo->prepare("SELECT AVG(accuracy_score) as avg_acc FROM speech_logs WHERE user_id = ?");
         $speechStmt->execute([$activeChildId]);
         $avgAccRes = $speechStmt->fetch(PDO::FETCH_ASSOC);
-        $speechAccuracy = ($avgAccRes && $avgAccRes['avg_acc'] !== null) ? round(floatval($avgAccRes['avg_acc'])) . '%' : '0%';
+        if ($avgAccRes && $avgAccRes['avg_acc'] !== null) {
+            $speechAccuracy = round(floatval($avgAccRes['avg_acc']));
+            $speechAccuracyStr = $speechAccuracy . '%';
+        }
     } catch (Exception $e) {
-        $speechAccuracy = '0%';
+        $speechAccuracy = 0;
+        $speechAccuracyStr = '0%';
     }
 
     try {
@@ -182,7 +210,13 @@ if ($activeChildId > 0) {
         $weeklyStars = 0;
     }
 
-    $weeklyGoalPct = min(100, round(($weeklyStars / 50) * 100));
+    $weeklyGoalPct = min(100, round(($weeklyStars / 30) * 100));
+
+    // --- REAL PROGRESS PERCENTAGE ALGORITHM ---
+    $curriculumTarget = 10;
+    $curriculumScore = min(100, ($completedLessons / $curriculumTarget) * 100);
+    $realProgressPct = round(($curriculumScore * 0.40) + ($speechAccuracy * 0.30) + ($weeklyGoalPct * 0.30));
+    $realProgressPct = max(0, min(100, $realProgressPct));
 
     try {
         $gameBreakdownStmt = $pdo->prepare("SELECT activity_type, COUNT(*) as cnt FROM activity_logs WHERE user_id = ? GROUP BY activity_type");
@@ -225,7 +259,7 @@ if (!function_exists('timeAgo')) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Advanced Parent Portal | Spark Steps</title>
-<meta http-equiv="refresh" content="15">
+<meta http-equiv="refresh" content="30">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
@@ -280,22 +314,45 @@ h1, h2, h3, h4, .brand-font { font-family: 'Fredoka', cursive, sans-serif; }
 <div class="col-md-8">
 <span class="badge bg-white text-primary rounded-pill px-3 py-2 fw-bold mb-2 shadow-sm">
 <?php if ($isCurrentlyPlaying): ?>
-<span class="pulse-dot me-1"></span> Live Activity: <?php echo htmlspecialchars($childName); ?> is playing now!
+<span class="pulse-dot me-1"></span> Live Activity: <?php echo htmlspecialchars($childName); ?> is active now!
 <?php else: ?>
-Student Linked: <strong><?php echo htmlspecialchars($activeChild['email'] ?? 'admin@gmail.com'); ?></strong>
+Student Linked: <strong><?php echo htmlspecialchars($activeChild['email'] ?? 'Student'); ?></strong> (ID: #<?php echo $activeChildId; ?>)
 <?php endif; ?>
 </span>
 <h2 class="brand-font fw-bold fs-1 mb-2">Welcome, <?php echo htmlspecialchars($parentName); ?>!</h2>
-<p class="opacity-90 fs-5 mb-0">Advanced live tracking and game progress telemetry for <strong><?php echo htmlspecialchars($childName); ?></strong>.</p>
+<p class="opacity-90 fs-5 mb-0">Advanced live tracking and real progress telemetry for <strong><?php echo htmlspecialchars($childName); ?></strong>.</p>
 </div>
 <div class="col-md-4 text-md-end mt-3 mt-md-0 no-print">
 <form method="POST" class="d-inline-block">
 <input type="hidden" name="action" value="link_student_parent">
-<input type="hidden" name="student_email" value="<?php echo htmlspecialchars($activeChild['email'] ?? 'admin@gmail.com'); ?>">
+<input type="hidden" name="student_email" value="<?php echo htmlspecialchars($activeChild['email'] ?? ''); ?>">
 <button type="submit" class="btn btn-light text-primary rounded-pill px-4 fw-bold shadow-sm">
-<i class="fa-solid fa-sync me-1"></i> Force Sync Student
+<i class="fa-solid fa-sync me-1"></i> Force Sync Student ID
 </button>
 </form>
+</div>
+</div>
+</div>
+
+<!-- Real Progress Overview Banner -->
+<div class="row g-4 mb-4">
+<div class="col-12">
+<div class="bg-white rounded-4 p-4 border shadow-sm">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
+<div>
+<span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-1 fw-semibold mb-1">
+<i class="fa-solid fa-chart-pie me-1"></i> Overall Real Progress Score
+</span>
+<h3 class="brand-font fw-bold text-dark mb-0">Overall Student Milestone Mastery</h3>
+</div>
+<div class="text-md-end">
+<span class="display-6 brand-font fw-bold text-primary"><?php echo $realProgressPct; ?>%</span>
+<span class="text-muted small d-block">Calculated from Modules, Speech & Stars</span>
+</div>
+</div>
+<div class="progress" style="height: 16px; border-radius: 10px; background-color: #f1f5f9;">
+<div class="progress-bar bg-primary progress-bar-striped progress-bar-animated rounded-pill" role="progressbar" style="width: <?php echo $realProgressPct; ?>%;" aria-valuenow="<?php echo $realProgressPct; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+</div>
 </div>
 </div>
 </div>
@@ -303,7 +360,7 @@ Student Linked: <strong><?php echo htmlspecialchars($activeChild['email'] ?? 'ad
 <div class="row g-3 mb-4 row-cols-1 row-cols-sm-2 row-cols-xl-4">
 <div class="col">
 <div class="metric-card">
-<div class="d-flex justify-content-between mb-3"><span class="text-secondary fw-semibold small">Total Logs / Activities</span><div class="icon-circle bg-primary-subtle text-primary"><i class="fa-solid fa-gamepad"></i></div></div>
+<div class="d-flex justify-content-between mb-3"><span class="text-secondary fw-semibold small">Completed Modules</span><div class="icon-circle bg-primary-subtle text-primary"><i class="fa-solid fa-graduation-cap"></i></div></div>
 <h2 class="brand-font fw-bold text-dark mb-1"><?php echo $completedLessons; ?></h2>
 <span class="text-success small fw-semibold"><i class="fa-solid fa-bolt me-1"></i>Real-time logged</span>
 </div>
@@ -311,7 +368,7 @@ Student Linked: <strong><?php echo htmlspecialchars($activeChild['email'] ?? 'ad
 <div class="col">
 <div class="metric-card">
 <div class="d-flex justify-content-between mb-3"><span class="text-secondary fw-semibold small">Speech Clarity Score</span><div class="icon-circle bg-success-subtle text-success"><i class="fa-solid fa-microphone-lines"></i></div></div>
-<h2 class="brand-font fw-bold text-dark mb-1"><?php echo $speechAccuracy; ?></h2>
+<h2 class="brand-font fw-bold text-dark mb-1"><?php echo $speechAccuracyStr; ?></h2>
 <span class="text-success small fw-semibold"><i class="fa-solid fa-chart-line me-1"></i>Microphone analysis</span>
 </div>
 </div>

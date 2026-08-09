@@ -2,6 +2,7 @@
 // student/emotions.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -29,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if ($score !== false && $total !== false && $total > 0) {
         $percentage = round(($score / $total) * 100);
         try {
-            $stmt = $pdo->prepare("INSERT INTO student_progress (user_id, activity_type, score, total_items, percentage, updated_at) VALUES (?, 'emotion_quiz', ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE score = VALUES(score), total_items = VALUES(total_items), percentage = VALUES(percentage), updated_at = NOW()");
-            $stmt->execute([$userId, $score, $total, $percentage]);
+            $stars = $percentage >= 80 ? 3 : ($percentage >= 50 ? 2 : 1);
+            recordStudentActivity($pdo, (int)$userId, 'emotions', 'Emotion Match Game', "Completed emotion quiz: {$score}/{$total} ({$percentage}%)", 5, $stars, 'fa-face-smile-beam', '#f59e0b');
             echo json_encode(['status' => 'success', 'message' => 'Progress saved successfully.']);
         } catch (Exception $e) {
             echo json_encode(['status' => 'error', 'message' => 'Database error.']);

@@ -2,6 +2,7 @@
 // student/speech.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -32,8 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if (!empty($word)) {
         try {
-            $stmt = $pdo->prepare("INSERT INTO speech_practice_logs (student_id, word_id, target_word, spoken_text, is_correct, stars, feedback_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
-            $stmt->execute([$studentId, $wordId, $word, $spokenText, $isCorrect, $stars, $feedbackType]);
+            recordSpeechActivity($pdo, (int)$studentId, $word, $spokenText, $isCorrect === 1, $stars);
             echo json_encode(['status' => 'success']);
         } catch (Exception $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);

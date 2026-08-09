@@ -2,6 +2,7 @@
 // student/pecs.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 // Session & Role Guard
 if (!isset($_SESSION['user_id'])) {
@@ -36,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']
 
         if (!empty($sentence)) {
             try {
-                $stmt = $pdo->prepare("INSERT INTO pecs_practice_logs (student_id, sentence, card_count, is_verified, emotion_state, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
-                $stmt->execute([$studentId, $sentence, $cardCount, $isVerified, $emotionState]);
+                $stars = $isVerified ? 2 : 1;
+                recordStudentActivity($pdo, (int)$studentId, 'pecs', 'PECS Sentence Builder', 'Built a ' . $cardCount . '-card sentence: “' . $sentence . '”', 2, $stars, 'fa-icons', '#6366f1');
                 echo json_encode(['status' => 'success', 'message' => 'PECS progress saved successfully!']);
             } catch (Exception $e) {
                 echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);

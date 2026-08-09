@@ -4,7 +4,7 @@
 // 1. Database Configuration (Uses config.php constants if defined, defaults to XAMPP)
 $dbHost = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
 $dbPort = defined('DB_PORT') ? DB_PORT : '3306';
-$dbName = defined('DB_NAME') ? DB_NAME : 'autilearn_db';
+$dbName = defined('DB_NAME') ? DB_NAME : 'autilearn';
 $dbUser = defined('DB_USER') ? DB_USER : 'root';
 $dbPass = defined('DB_PASS') ? DB_PASS : '';
 

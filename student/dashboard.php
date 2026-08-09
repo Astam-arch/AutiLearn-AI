@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -31,7 +32,7 @@ $totalActivities = 5;
 
 if (isset($pdo) && $pdo instanceof PDO) {
     try {
-        $stmt = $pdo->prepare("SELECT stars_earned, streak_days FROM users WHERE id = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT COALESCE(stars, stars_earned, 0) AS stars_earned, streak_days FROM users WHERE id = ? LIMIT 1");
         $stmt->execute([$studentId]);
         $userStats = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -40,13 +41,16 @@ if (isset($pdo) && $pdo instanceof PDO) {
             $streakDays = (int)($userStats['streak_days'] ?? 0);
         }
 
-        $stmtProg = $pdo->prepare("SELECT COUNT(*) FROM student_activities WHERE user_id = ? AND status = 'completed'");
+        // Use the same source of truth as the parent dashboard.
+        ensureActivityTrackingSchema($pdo);
+        $stmtProg = $pdo->prepare("SELECT COUNT(DISTINCT title) FROM activity_logs WHERE user_id = ?");
         $stmtProg->execute([$studentId]);
         $completedActivities = (int)$stmtProg->fetchColumn();
     } catch (PDOException $e) {
-        $starsEarned = 24;
-        $streakDays = 5;
-        $completedActivities = 3;
+        // Keep the dashboard truthful when a database is unavailable.
+        $starsEarned = 0;
+        $streakDays = 0;
+        $completedActivities = 0;
     }
 }
 

@@ -2,6 +2,7 @@
 // student/calm.php
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/activity_tracking.php';
 
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
@@ -26,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     if ($activityType) {
         try {
-            $stmt = $pdo->prepare("INSERT INTO student_progress (user_id, activity_type, score, total_items, percentage, updated_at) VALUES (?, ?, 1, 1, 100, NOW()) ON DUPLICATE KEY UPDATE score = score + 1, total_items = total_items + 1, percentage = 100, updated_at = NOW()");
-            $stmt->execute([$userId, 'calm_' . $activityType]);
+            $activityLabel = ucwords(str_replace(['_', '-'], ' ', $activityType));
+            recordStudentActivity($pdo, (int)$userId, 'calm', 'Calm Sensory Zone: ' . $activityLabel, 'Completed a calming activity: ' . $activityLabel . '.', 2, 1, 'fa-spa', '#0ea5e9');
             echo json_encode(['status' => 'success', 'message' => 'Progress saved successfully.']);
         } catch (Exception $e) {
             echo json_encode(['status' => 'error', 'message' => 'Database error.']);
