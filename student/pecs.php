@@ -17,8 +17,37 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
     exit;
 }
 
+$studentId = $_SESSION['user_id'];
 $studentName = $_SESSION['full_name'] ?? 'Learner';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dashboard.php';
+
+// Handle AJAX Request to Save PECS Activity & Sentence Building
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']) && strpos($_SERVER['HTTP_CONTENT_TYPE'], 'application/json') !== false) {
+    $rawInput = file_get_contents('php://input');
+    $data = json_decode($rawInput, true);
+
+    if (isset($data['action']) && $data['action'] === 'save_pecs_attempt') {
+        header('Content-Type: application/json');
+        
+        $sentence = trim($data['sentence'] ?? '');
+        $isVerified = intval($data['is_verified'] ?? 0);
+        $cardCount = intval($data['card_count'] ?? 0);
+        $emotionState = trim($data['emotion_state'] ?? 'Happy');
+
+        if (!empty($sentence)) {
+            try {
+                $stmt = $pdo->prepare("INSERT INTO pecs_practice_logs (student_id, sentence, card_count, is_verified, emotion_state, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+                $stmt->execute([$studentId, $sentence, $cardCount, $isVerified, $emotionState]);
+                echo json_encode(['status' => 'success', 'message' => 'PECS progress saved successfully!']);
+            } catch (Exception $e) {
+                echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+            }
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Empty sentence data']);
+        }
+        exit;
+    }
+}
 
 // Expanded PECS Categories & Cards with Strict Grammar and Target Types
 $pecsData = [
@@ -111,11 +140,8 @@ $pecsData = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced Grammar PECS Board & AI Engine | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
     <style>
@@ -313,7 +339,6 @@ $pecsData = [
 </head>
 <body>
 
-<!-- NAVIGATION BAR -->
 <nav class="navbar navbar-pecs sticky-top mb-4">
     <div class="container">
         <a class="navbar-brand brand-font fs-3 text-primary d-flex align-items-center gap-2" href="<?php echo htmlspecialchars($dashboardUrl); ?>">
@@ -332,8 +357,6 @@ $pecsData = [
 </nav>
 
 <div class="container">
-
-    <!-- REAL-TIME EMOTION SELECTOR & AI RECOMMENDATIONS PANEL -->
     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
             <div>
@@ -354,13 +377,10 @@ $pecsData = [
 
         <div class="mt-3">
             <span class="text-muted small fw-semibold mb-2 d-block"><i class="fa-solid fa-wand-magic-sparkles text-primary me-1"></i> AI Recommended Sentences for (<span id="activeEmotionText">Happy</span>):</span>
-            <div class="row g-2" id="aiRecommendationsGrid">
-                <!-- Populated via JS -->
-            </div>
+            <div class="row g-2" id="aiRecommendationsGrid"></div>
         </div>
     </div>
 
-    <!-- SENTENCE BUILDER STRIP -->
     <div class="sentence-strip-container mb-4" id="stripContainer">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <div>
@@ -376,7 +396,6 @@ $pecsData = [
             </div>
         </div>
 
-        <!-- AI Feedback Alert Banner -->
         <div id="aiFeedbackBanner" class="alert mt-3 mb-0 p-3 shadow-sm" role="alert"></div>
 
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
@@ -399,7 +418,6 @@ $pecsData = [
         </div>
     </div>
 
-    <!-- CATEGORIES & CARDS -->
     <?php foreach ($pecsData as $catKey => $category): ?>
         <div class="category-section">
             <div class="category-header d-flex align-items-center gap-2">
@@ -421,10 +439,8 @@ $pecsData = [
             </div>
         </div>
     <?php endforeach; ?>
-
 </div>
 
-<!-- JavaScript Database & Advanced Validation Handlers -->
 <script>
     const masterCardsDatabase = {
         <?php foreach ($pecsData as $catKey => $cat): ?>
@@ -536,12 +552,10 @@ $pecsData = [
         }
     }
 
-    // Advanced Grammar Guard & Anti-Repetition Engine
     function addCardByText(cardText) {
         let card = masterCardsDatabase[cardText];
         if (!card) return;
 
-        // Rule 1: Check for duplicate words in the sentence strip (No repeated words)
         const isAlreadyAdded = selectedCards.some(item => item.text.toLowerCase() === card.text.toLowerCase());
         if (isAlreadyAdded) {
             triggerErrorAnimation();
@@ -550,7 +564,6 @@ $pecsData = [
             return;
         }
 
-        // Rule 2: First card must be a sentence starter or standalone phrase
         if (selectedCards.length === 0) {
             if (card.type !== 'starter' && card.type !== 'standalone') {
                 triggerErrorAnimation();
@@ -559,7 +572,6 @@ $pecsData = [
                 return;
             }
         } else {
-            // Rule 3: If starting with a starter, check target category compatibility
             let firstCard = selectedCards[0];
             if (firstCard.type === 'starter' && firstCard.targets && firstCard.targets.length > 0) {
                 if (card.category && !firstCard.targets.includes(card.category)) {
@@ -600,10 +612,36 @@ $pecsData = [
         renderStrip();
     });
 
+    function saveAttemptToServer(sentence, isVerified, cardCount) {
+        const payload = {
+            action: 'save_pecs_attempt',
+            sentence: sentence,
+            is_verified: isVerified,
+            card_count: cardCount,
+            emotion_state: currentEmotion
+        };
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('PECS Progress Saved:', data);
+        })
+        .catch(error => {
+            console.error('Error saving PECS progress:', error);
+        });
+    }
+
     btnPlay.addEventListener('click', () => {
         if (selectedCards.length === 0) return;
         const fullSentence = selectedCards.map(c => c.text).join(' ');
         speakText(fullSentence + ".");
+        saveAttemptToServer(fullSentence, 0, selectedCards.length);
     });
 
     btnAiVerify.addEventListener('click', () => {
@@ -624,6 +662,7 @@ $pecsData = [
             if (data.isValid) {
                 showAiFeedback('success', `<i class="fa-solid fa-circle-check me-2"></i><strong>AI Verified:</strong> <em>"${data.sentence}."</em> Excellent grammar structure!`);
                 speakText(`Great job! Complete sentence: ${data.sentence}`);
+                saveAttemptToServer(data.sentence, 1, selectedCards.length);
             } else {
                 triggerErrorAnimation();
                 showAiFeedback('danger', `<i class="fa-solid fa-circle-exclamation me-2"></i><strong>AI Grammar Notice:</strong> ${data.message}`);
@@ -663,7 +702,6 @@ $pecsData = [
         btnBackspace.disabled = false;
         btnClear.disabled = false;
 
-        // Update dynamic badge guidance based on current card selections
         if (selectedCards.length === 1 && selectedCards[0].type === 'starter') {
             grammarGuidanceBadge.textContent = `Rule: Add a matching target word`;
         } else {

@@ -3,7 +3,6 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// Session & Role Guard
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
     header("Location: {$loginUrl}");
@@ -17,10 +16,34 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
     exit;
 }
 
+$studentId = $_SESSION['user_id'];
 $studentName = $_SESSION['full_name'] ?? 'Learner';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dashboard.php';
 
-// Expanded Multi-Level Practice Database (Levels 1 to 6)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_attempt') {
+    header('Content-Type: application/json');
+    
+    $wordId = $_POST['word_id'] ?? '';
+    $word = trim($_POST['word'] ?? '');
+    $spokenText = trim($_POST['spoken_text'] ?? '');
+    $isCorrect = intval($_POST['is_correct'] ?? 0);
+    $stars = intval($_POST['stars'] ?? 0);
+    $feedbackType = trim($_POST['feedback_type'] ?? '');
+
+    if (!empty($word)) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO speech_practice_logs (student_id, word_id, target_word, spoken_text, is_correct, stars, feedback_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+            $stmt->execute([$studentId, $wordId, $word, $spokenText, $isCorrect, $stars, $feedbackType]);
+            echo json_encode(['status' => 'success']);
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid word data']);
+    }
+    exit;
+}
+
 $practiceCards = [
     [
         'category' => 'Basic Words (Nouns)',
@@ -93,11 +116,8 @@ $practiceCards = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Speech Lab | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 
     <style>
@@ -124,7 +144,6 @@ $practiceCards = [
             padding: 14px 0;
         }
 
-        /* MAIN PRACTICE CONTAINER */
         .practice-display-card {
             background: #ffffff;
             border-radius: var(--card-radius);
@@ -151,7 +170,6 @@ $practiceCards = [
             margin-bottom: 30px;
         }
 
-        /* RECORDING MIC BUTTON */
         .mic-btn-container {
             position: relative;
             display: inline-block;
@@ -188,18 +206,9 @@ $practiceCards = [
         }
 
         @keyframes pulse-red {
-            0% {
-                transform: scale(0.98);
-                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
-            }
-            70% {
-                transform: scale(1.08);
-                box-shadow: 0 0 0 25px rgba(239, 68, 68, 0);
-            }
-            100% {
-                transform: scale(0.98);
-                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-            }
+            0% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1.08); box-shadow: 0 0 0 25px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
 
         .word-select-card {
@@ -233,7 +242,6 @@ $practiceCards = [
             flex-shrink: 0;
         }
 
-        /* FEEDBACK BOX */
         .feedback-box {
             border-radius: 18px;
             padding: 18px;
@@ -266,7 +274,6 @@ $practiceCards = [
 </head>
 <body>
 
-<!-- NAVIGATION BAR -->
 <nav class="navbar navbar-speech sticky-top mb-4">
     <div class="container">
         <a class="navbar-brand brand-font fs-3 text-success d-flex align-items-center gap-2" href="<?php echo htmlspecialchars($dashboardUrl); ?>">
@@ -283,25 +290,19 @@ $practiceCards = [
 
 <div class="container">
     <div class="row g-4">
-
-        <!-- MAIN PRACTICE ARENA -->
         <div class="col-lg-7">
             <div class="practice-display-card">
-                
                 <span id="activeCategoryBadge" class="badge bg-success-subtle text-success rounded-pill px-3 py-2 fw-semibold fs-6 mb-3">
                     Level 1 • Basic Words (Nouns)
                 </span>
 
-                <!-- Active Word Display -->
-                <div id="targetWord" class="target-word-display brand-font">Water</div>
+                <div id="targetWord" class="target-word-display brand-font" data-id="w1">Water</div>
                 <div id="targetPhonetic" class="phonetic-display">[ WAH-ter ]</div>
 
-                <!-- Controls: Listen to Native Audio -->
                 <button id="btnListen" class="btn btn-outline-success rounded-pill px-4 py-2 mb-4 fw-semibold">
                     <i class="fa-solid fa-volume-high me-2 fs-5"></i> Hear Pronunciation
                 </button>
 
-                <!-- Recording Mic Button -->
                 <div class="d-block text-center">
                     <div class="mic-btn-container">
                         <button id="btnMic" class="btn-mic">
@@ -313,10 +314,8 @@ $practiceCards = [
                     </div>
                 </div>
 
-                <!-- Live Hearing Transcript -->
                 <div id="transcriptBox" class="mt-3 text-muted small fst-italic" style="min-height: 24px;"></div>
 
-                <!-- Feedback & Score Box -->
                 <div id="feedbackBox" class="feedback-box">
                     <div class="star-rating mb-2" id="starContainer">
                         <i class="fa-solid fa-star"></i>
@@ -326,11 +325,9 @@ $practiceCards = [
                     <h4 id="feedbackTitle" class="fw-bold mb-1">Awesome Job!</h4>
                     <p id="feedbackText" class="mb-0 small text-secondary">We heard you clearly!</p>
                 </div>
-
             </div>
         </div>
 
-        <!-- WORD & PHRASE SELECTION PANEL -->
         <div class="col-lg-5">
             <h4 class="fw-bold text-dark mb-3 brand-font">
                 <i class="fa-solid fa-layer-group text-success me-2"></i>Select Level & Practice
@@ -348,7 +345,7 @@ $practiceCards = [
                             <?php foreach ($group['items'] as $index => $item): ?>
                                 <div class="col-12">
                                     <div class="word-select-card <?php echo ($item['word'] === 'Water') ? 'active' : ''; ?>"
-                                         onclick="selectWord('<?php echo htmlspecialchars($item['word'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($item['phonetic'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($group['level'] . ' • ' . $group['category'], ENT_QUOTES); ?>', this)">
+                                         onclick="selectWord('<?php echo htmlspecialchars($item['id'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($item['word'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($item['phonetic'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($group['level'] . ' • ' . $group['category'], ENT_QUOTES); ?>', this)">
                                         <div class="icon-box" style="background-color: <?php echo $item['color']; ?>20; color: <?php echo $item['color']; ?>;">
                                             <i class="fa-solid <?php echo $item['icon']; ?>"></i>
                                         </div>
@@ -365,20 +362,17 @@ $practiceCards = [
                 <?php endforeach; ?>
             </div>
         </div>
-
     </div>
 </div>
 
-<!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    // State Variables
+    let currentWordId = "w1";
     let currentWord = "Water";
     let currentPhonetic = "WAH-ter";
     let isRecording = false;
 
-    // DOM Elements
     const targetWordElem = document.getElementById('targetWord');
     const targetPhoneticElem = document.getElementById('targetPhonetic');
     const activeCategoryBadge = document.getElementById('activeCategoryBadge');
@@ -392,14 +386,13 @@ $practiceCards = [
     const feedbackText = document.getElementById('feedbackText');
     const starContainer = document.getElementById('starContainer');
 
-    // Speech Synthesis (Text to Speech)
     const synth = window.speechSynthesis;
 
     function speakWord(text) {
         if (!synth) return;
         synth.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.85; // Natural speaking speed for learners
+        utterance.rate = 0.85;
         utterance.pitch = 1.0;
         synth.speak(utterance);
     }
@@ -408,29 +401,26 @@ $practiceCards = [
         speakWord(currentWord);
     });
 
-    // Select Word from Sidebar (Correctly updates active target word for audio & evaluation)
-    function selectWord(word, phonetic, badgeInfo, cardElement) {
+    function selectWord(id, word, phonetic, badgeInfo, cardElement) {
+        currentWordId = id;
         currentWord = word;
         currentPhonetic = phonetic;
 
         targetWordElem.textContent = word;
+        targetWordElem.setAttribute('data-id', id);
         targetPhoneticElem.textContent = `[ ${phonetic} ]`;
         activeCategoryBadge.textContent = badgeInfo;
 
-        // Reset Feedback UI
         feedbackBox.style.display = 'none';
         transcriptBox.textContent = '';
         micStatus.textContent = 'Tap microphone & say the word';
 
-        // Update active class on card
         document.querySelectorAll('.word-select-card').forEach(card => card.classList.remove('active'));
         if (cardElement) cardElement.classList.add('active');
 
-        // Play target word sound automatically using the newly selected word
         speakWord(word);
     }
 
-    // Web Speech API (Speech Recognition Setup)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
 
@@ -477,7 +467,6 @@ $practiceCards = [
         btnMic.style.opacity = '0.5';
     }
 
-    // Toggle Mic Recording
     btnMic.addEventListener('click', () => {
         if (!recognition) return;
 
@@ -498,7 +487,32 @@ $practiceCards = [
         }
     }
 
-    // Smart Precision Speech Evaluation with Extra Word & Verb Form Detectors
+    function saveAttemptToServer(spokenText, isCorrect, stars, feedbackType) {
+        const formData = new URLSearchParams();
+        formData.append('action', 'save_attempt');
+        formData.append('word_id', currentWordId);
+        formData.append('word', currentWord);
+        formData.append('spoken_text', spokenText);
+        formData.append('is_correct', isCorrect);
+        formData.append('stars', stars);
+        formData.append('feedback_type', feedbackType);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Attempt logged:', data);
+        })
+        .catch(error => {
+            console.error('Error logging attempt:', error);
+        });
+    }
+
     function evaluateSpeech(spokenText) {
         const cleanSpoken = spokenText.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
         const cleanTarget = currentWord.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
@@ -511,29 +525,28 @@ $practiceCards = [
         const spokenWordsArray = cleanSpoken.split(/\s+/);
         const targetWordsArray = cleanTarget.split(/\s+/);
 
-        // Case 1: Exact Match (Awards FULL 3 Stars)
         if (cleanSpoken === cleanTarget) {
             stars.forEach(s => s.classList.add('active'));
             feedbackBox.className = 'feedback-box bg-success-subtle text-success border border-success';
             feedbackTitle.textContent = '🌟 Perfect Pronunciation!';
             feedbackText.innerHTML = `Great job! You said <b>"${spokenText}"</b> correctly.`;
             speakWord('Great job! Perfect!');
+            saveAttemptToServer(spokenText, 1, 3, 'perfect');
             return;
         }
 
-        // Case 2: Target is single word, but user said extra words (e.g., Target: "Water", Spoken: "water run")
         if (targetWordsArray.length === 1 && spokenWordsArray.length > 1) {
             if (spokenWordsArray.includes(cleanTarget)) {
-                stars.forEach(s => s.classList.remove('active')); // NO full stars
+                stars.forEach(s => s.classList.remove('active'));
                 feedbackBox.className = 'feedback-box bg-warning-subtle text-warning-emphasis border border-warning';
                 feedbackTitle.textContent = '⚠️ Extra Words Detected!';
                 feedbackText.innerHTML = `You correctly pronounced <b>"${currentWord}"</b>, but you added extra words: <b>"${spokenText}"</b>. Please say ONLY the target word!`;
                 speakWord(`You said ${currentWord}, but added extra words. Please say only, ${currentWord}.`);
+                saveAttemptToServer(spokenText, 0, 0, 'extra_words');
                 return;
             }
         }
 
-        // Case 3: Verb-4 / Continuous form check (e.g., Target: "Water", Spoken: "watering")
         let isVerb4Mismatch = (cleanSpoken === cleanTarget + 'ing' || cleanSpoken === cleanTarget + 'g' || cleanSpoken === cleanTarget + 'ed');
         if (isVerb4Mismatch) {
             stars.forEach(s => s.classList.remove('active'));
@@ -541,20 +554,20 @@ $practiceCards = [
             feedbackTitle.textContent = '⚠️ Verb Form Notice (Verb-4 / Modification)';
             feedbackText.innerHTML = `You said <b>"${spokenText}"</b> (modified form). The target requires the exact base form <b>"${currentWord}"</b>. Try again!`;
             speakWord(`Good try! You said ${spokenText}, but please use the base form, ${currentWord}.`);
+            saveAttemptToServer(spokenText, 0, 0, 'verb_mismatch');
             return;
         }
 
-        // Case 4: Plural / Suffix variations on Nouns (e.g. Target: "Book", Spoken: "books" or Target: "Ball", Spoken: "balling")
         if (cleanSpoken === cleanTarget + 's' || cleanSpoken === cleanTarget + 'es') {
             stars.forEach(s => s.classList.remove('active'));
             feedbackBox.className = 'feedback-box bg-warning-subtle text-warning-emphasis border border-warning';
             feedbackTitle.textContent = '⚠️ Plural Form Detected';
             feedbackText.innerHTML = `You said <b>"${spokenText}"</b> (Plural). Please say the singular form <b>"${currentWord}"</b>.`;
             speakWord(`You said plural. Please say singular, ${currentWord}.`);
+            saveAttemptToServer(spokenText, 0, 0, 'plural_detected');
             return;
         }
 
-        // Case 5: Completely incorrect or mismatched pronunciation (0 Stars)
         let targetFirstLetter = cleanTarget.charAt(0);
         let spokenFirstLetter = cleanSpoken.charAt(0);
 
@@ -564,12 +577,14 @@ $practiceCards = [
             feedbackTitle.textContent = '🔍 Almost There!';
             feedbackText.innerHTML = `We heard <b>"${spokenText}"</b>, but the target is <b>"${currentWord}"</b>. Listen to the audio and try again!`;
             speakWord(`Not quite. You said ${spokenText}. Let's try ${currentWord}.`);
+            saveAttemptToServer(spokenText, 0, 0, 'almost_there');
         } else {
             stars.forEach(s => s.classList.remove('active'));
             feedbackBox.className = 'feedback-box bg-danger-subtle text-danger border border-danger';
             feedbackTitle.textContent = '❌ Keep Practicing!';
             feedbackText.innerHTML = `That sounded like <b>"${spokenText}"</b>. Let's say <b>"${currentWord}"</b> together.`;
             speakWord(`Let's try again. Say, ${currentWord}.`);
+            saveAttemptToServer(spokenText, 0, 0, 'incorrect');
         }
     }
 </script>

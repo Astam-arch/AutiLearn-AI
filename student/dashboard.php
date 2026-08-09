@@ -1,6 +1,4 @@
 <?php
-// student/dashboard.php
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -10,51 +8,45 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// =====================================================
-// 1. SESSION & ROLE GUARD
-// =====================================================
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
     header("Location: {$loginUrl}");
     exit;
 }
 
-// Redirect non-student roles to their appropriate dashboard
 if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
     $role = htmlspecialchars($_SESSION['role'], ENT_QUOTES, 'UTF-8');
-    $dashboardUrl = defined('BASE_URL')
-        ? BASE_URL . "{$role}/dashboard.php"
-        : "../{$role}/dashboard.php";
-
+    $dashboardUrl = defined('BASE_URL') ? BASE_URL . "{$role}/dashboard.php" : "../{$role}/dashboard.php";
     header("Location: {$dashboardUrl}");
     exit;
 }
 
 $studentName = $_SESSION['full_name'] ?? 'Learner';
-$studentId   = (int)($_SESSION['user_id'] ?? 0);
+$studentId = (int)($_SESSION['user_id'] ?? 0);
 
-// =====================================================
-// 2. FETCH OR DEFAULT GAMIFICATION STATS
-// =====================================================
-$starsEarned = 24;
-$streakDays = 5;
-$completedActivities = 3;
-$totalActivities = 6;
+$starsEarned = 0;
+$streakDays = 0;
+$completedActivities = 0;
+$totalActivities = 5;
 
 if (isset($pdo) && $pdo instanceof PDO) {
     try {
-        $stmt = $pdo->prepare(
-            "SELECT stars_earned, streak_days FROM users WHERE id = ? LIMIT 1"
-        );
+        $stmt = $pdo->prepare("SELECT stars_earned, streak_days FROM users WHERE id = ? LIMIT 1");
         $stmt->execute([$studentId]);
         $userStats = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($userStats) {
-            $starsEarned = isset($userStats['stars_earned']) ? (int)$userStats['stars_earned'] : $starsEarned;
-            $streakDays = isset($userStats['streak_days']) ? (int)$userStats['streak_days'] : $streakDays;
+            $starsEarned = (int)($userStats['stars_earned'] ?? 0);
+            $streakDays = (int)($userStats['streak_days'] ?? 0);
         }
+
+        $stmtProg = $pdo->prepare("SELECT COUNT(*) FROM student_activities WHERE user_id = ? AND status = 'completed'");
+        $stmtProg->execute([$studentId]);
+        $completedActivities = (int)$stmtProg->fetchColumn();
     } catch (PDOException $e) {
-        // Soft fallback to defaults
+        $starsEarned = 24;
+        $streakDays = 5;
+        $completedActivities = 3;
     }
 }
 
@@ -62,35 +54,27 @@ $safeTotalActivities = ($totalActivities > 0) ? $totalActivities : 1;
 $progressPercentage = min(100, max(0, round(($completedActivities / $safeTotalActivities) * 100)));
 
 $logoutUrl = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
-$siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
+$siteName = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard | <?php echo htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8'); ?></title>
-
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-
     <style>
         :root {
             --bg-body: #f4f7fc;
             --card-bg: #ffffff;
             --card-radius: 24px;
             --text-main: #0f172a;
-            --text-muted: #334155; /* Darker, high contrast */
+            --text-muted: #334155;
             --primary-blue: #4f46e5;
             --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         body {
             background-color: var(--bg-body);
             font-family: 'Poppins', sans-serif;
@@ -98,21 +82,15 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             min-height: 100vh;
             padding-bottom: 80px;
         }
-
         h1, h2, h3, h4, h5, .brand-font {
             font-family: 'Fredoka', cursive, sans-serif;
         }
-
-        /* =========================================
-            NAVBAR
-        ========================================= */
         .navbar-student {
             background: #ffffff;
             border-bottom: 1px solid #e2e8f0;
             padding: 14px 0;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
         }
-
         .brand-icon-box {
             width: 44px;
             height: 44px;
@@ -124,10 +102,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             justify-content: center;
             box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
         }
-
-        /* =========================================
-            STAT BADGES
-        ========================================= */
         .stat-badge {
             background: var(--card-bg);
             border-radius: 16px;
@@ -139,16 +113,11 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             border: 1px solid #e2e8f0;
             transition: var(--transition-smooth);
         }
-
         .stat-badge:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 25px rgba(79, 70, 229, 0.08);
             border-color: #cbd5e1;
         }
-
-        /* =========================================
-            ACTIVITY CARDS (ENHANCED DESIGN)
-        ========================================= */
         .activity-card {
             background: var(--card-bg);
             border-radius: var(--card-radius);
@@ -165,7 +134,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             position: relative;
             overflow: hidden;
         }
-
         .activity-card::before {
             content: '';
             position: absolute;
@@ -176,24 +144,17 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             background: transparent;
             transition: var(--transition-smooth);
         }
-
         .activity-card:hover {
             transform: translateY(-8px);
             box-shadow: 0 16px 35px rgba(79, 70, 229, 0.12);
             border-color: #cbd5e1;
             color: inherit;
         }
-
-        /* Accent top borders for cards */
         .card-pecs::before { background: #4f46e5; }
         .card-speech::before { background: #059669; }
         .card-grammar::before { background: #0d9488; }
         .card-games::before { background: #ea580c; }
         .card-calm::before { background: #ca8a04; }
-
-        /* =========================================
-            ICON BOXES
-        ========================================= */
         .icon-circle {
             width: 72px;
             height: 72px;
@@ -205,15 +166,12 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             margin-bottom: 22px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         }
-
-        /* Card Text High Visibility Fix */
         .activity-title {
             font-size: 1.35rem;
             font-weight: 700;
             color: #0f172a;
             margin-bottom: 12px;
         }
-
         .activity-desc {
             font-size: 0.98rem;
             color: var(--text-muted);
@@ -221,10 +179,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             margin-bottom: 0;
             font-weight: 500;
         }
-
-        /* =========================================
-            PROGRESS BAR
-        ========================================= */
         .progress-container-card {
             background: var(--card-bg);
             border-radius: var(--card-radius);
@@ -232,7 +186,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             border: 1px solid #e2e8f0;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
         }
-
         .progress-pill {
             height: 14px;
             border-radius: 20px;
@@ -240,17 +193,12 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             overflow: hidden;
             padding: 2px;
         }
-
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #4f46e5, #7c3aed);
             border-radius: 20px;
             transition: width 1s ease-in-out;
         }
-
-        /* =========================================
-            SUPPORT ALERT BANNER
-        ========================================= */
         .alert-support {
             background: #f0fdf4;
             border: 1px solid #bbf7d0;
@@ -260,12 +208,8 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
         }
     </style>
 </head>
-
 <body>
 
-<!-- =====================================================
-    STUDENT NAVIGATION
-===================================================== -->
 <nav class="navbar navbar-student sticky-top">
     <div class="container">
         <a class="navbar-brand brand-font fs-4 text-dark d-flex align-items-center gap-3 text-decoration-none" href="dashboard.php">
@@ -285,14 +229,10 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
     </div>
 </nav>
 
-<!-- =====================================================
-    STUDENT HERO & STATS
-===================================================== -->
 <div class="container mt-4">
-
     <div class="row align-items-center g-4 mb-4">
         <div class="col-lg-7">
-            <span class="badge bg-indigo-subtle text-indigo rounded-pill px-3 py-2 mb-3 fw-semibold" style="background-color: #ede9fe; color: #4f46e5;">
+            <span class="badge rounded-pill px-3 py-2 mb-3 fw-semibold" style="background-color: #ede9fe; color: #4f46e5;">
                 <i class="fa-solid fa-wand-magic-sparkles me-1 text-primary"></i> Ready to learn & play today?
             </span>
             <h1 class="display-5 fw-bold text-dark mb-2">
@@ -302,10 +242,8 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
                 Pick an activity, practice speech with friendly real-time guidance, or play interactive learning games.
             </p>
         </div>
-
         <div class="col-lg-5">
             <div class="d-flex flex-wrap gap-3 justify-content-lg-end">
-                <!-- STARS -->
                 <div class="stat-badge">
                     <div class="fs-2 text-warning">
                         <i class="fa-solid fa-star"></i>
@@ -315,8 +253,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
                         <small class="text-muted fw-semibold">Stars Earned</small>
                     </div>
                 </div>
-
-                <!-- STREAK -->
                 <div class="stat-badge">
                     <div class="fs-2 text-danger">
                         <i class="fa-solid fa-fire"></i>
@@ -330,9 +266,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
         </div>
     </div>
 
-    <!-- =================================================
-         SUPPORT NOTICE
-    ================================================== -->
     <div class="alert-support d-flex align-items-center gap-3 mb-4 shadow-sm">
         <i class="fa-solid fa-circle-info fs-3 text-success"></i>
         <div>
@@ -343,9 +276,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
         </div>
     </div>
 
-    <!-- =================================================
-         DAILY PROGRESS BAR
-    ================================================== -->
     <div class="progress-container-card mb-4">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="fw-bold fs-6 text-dark d-flex align-items-center gap-2">
@@ -360,9 +290,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
         </div>
     </div>
 
-    <!-- =================================================
-         MAIN MODULES & GAMES
-    ================================================== -->
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="fw-bold text-dark mb-0 fs-4">
             <i class="fa-solid fa-gamepad text-primary me-2"></i> Learning Activities & Games
@@ -370,8 +297,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
     </div>
 
     <div class="row g-4">
-
-        <!-- 1. PECS VISUAL BOARD -->
         <div class="col-md-6 col-lg-4">
             <a href="pecs.php" class="activity-card card-pecs">
                 <div>
@@ -390,7 +315,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             </a>
         </div>
 
-        <!-- 2. AI SPEECH LAB -->
         <div class="col-md-6 col-lg-4">
             <a href="speech.php" class="activity-card card-speech">
                 <div>
@@ -409,7 +333,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             </a>
         </div>
 
-        <!-- 3. SENTENCE BUILDER -->
         <div class="col-md-6 col-lg-4">
             <a href="grammar.php" class="activity-card card-grammar">
                 <div>
@@ -428,7 +351,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             </a>
         </div>
 
-        <!-- 4. EMOTION MATCH GAME -->
         <div class="col-md-6 col-lg-4">
             <a href="emotions.php" class="activity-card card-games" aria-label="Open Emotion Match Game">
                 <div>
@@ -447,7 +369,6 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
             </a>
         </div>
 
-        <!-- 5. CALM SENSORY ZONE -->
         <div class="col-md-6 col-lg-4">
             <a href="calm.php" class="activity-card card-calm">
                 <div>
@@ -465,13 +386,9 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
                 </div>
             </a>
         </div>
-
     </div>
-
 </div>
 
-<!-- Bootstrap 5 JS Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 </body>
 </html>

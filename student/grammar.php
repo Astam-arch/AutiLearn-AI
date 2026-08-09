@@ -3,7 +3,6 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// Session & Role Guard
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
     header("Location: {$loginUrl}");
@@ -17,11 +16,31 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
     exit;
 }
 
+$userId = $_SESSION['user_id'];
 $studentName = $_SESSION['full_name'] ?? 'Learner';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dashboard.php';
 $speechLabUrl = defined('BASE_URL') ? BASE_URL . 'student/speech.php' : 'speech.php';
 
-// Grammar Lessons & Verb Form Database
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_progress') {
+    header('Content-Type: application/json');
+    $score = filter_input(INPUT_POST, 'score', FILTER_VALIDATE_INT);
+    $total = filter_input(INPUT_POST, 'total', FILTER_VALIDATE_INT);
+    
+    if ($score !== false && $total !== false && $total > 0) {
+        $percentage = round(($score / $total) * 100);
+        try {
+            $stmt = $pdo->prepare("INSERT INTO student_progress (user_id, activity_type, score, total_items, percentage, updated_at) VALUES (?, 'grammar_quiz', ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE score = VALUES(score), total_items = VALUES(total_items), percentage = VALUES(percentage), updated_at = NOW()");
+            $stmt->execute([$userId, $score, $total, $percentage]);
+            echo json_encode(['status' => 'success', 'message' => 'Progress saved successfully.']);
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => 'Database error.']);
+        }
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid data.']);
+    }
+    exit;
+}
+
 $grammarTopics = [
     [
         'id' => 't1',
@@ -63,7 +82,6 @@ $grammarTopics = [
     ]
 ];
 
-// Expanded Quick Grammar Quiz Bank (6 Questions)
 $quizQuestions = [
     [
         'question' => 'What is the correct base form (V1) if someone says "Watering"?',
@@ -109,37 +127,29 @@ $quizQuestions = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grammar Mastery Lab | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-
     <style>
         :root {
             --bg-soft: #f0fdf4;
             --primary-green: #16a34a;
             --card-radius: 24px;
         }
-
         body {
             background-color: var(--bg-soft);
             font-family: 'Poppins', sans-serif;
             color: #1e293b;
             padding-bottom: 80px;
         }
-
         h1, h2, h3, h4, .brand-font {
             font-family: 'Fredoka', cursive, sans-serif;
         }
-
         .navbar-speech {
             background: #ffffff;
             border-bottom: 2px solid #e2e8f0;
             padding: 14px 0;
         }
-
         .grammar-card {
             background: #ffffff;
             border-radius: var(--card-radius);
@@ -149,11 +159,9 @@ $quizQuestions = [
             margin-bottom: 25px;
             transition: transform 0.2s ease;
         }
-
         .grammar-card:hover {
             transform: translateY(-3px);
         }
-
         .icon-box {
             width: 50px;
             height: 50px;
@@ -164,14 +172,11 @@ $quizQuestions = [
             font-size: 1.5rem;
             flex-shrink: 0;
         }
-
         .table-custom th {
             background-color: #f8fafc;
             color: #475569;
             font-weight: 600;
         }
-
-        /* QUIZ STYLING */
         .quiz-container {
             background: #ffffff;
             border-radius: var(--card-radius);
@@ -179,7 +184,6 @@ $quizQuestions = [
             border: 3px solid #bbf7d0;
             box-shadow: 0 15px 35px rgba(22, 163, 74, 0.08);
         }
-
         .quiz-option-btn {
             display: block;
             width: 100%;
@@ -193,20 +197,17 @@ $quizQuestions = [
             margin-bottom: 12px;
             transition: all 0.2s ease;
         }
-
         .quiz-option-btn:hover {
             background: #f0fdf4;
             border-color: #16a34a;
             color: #15803d;
         }
-
         .quiz-option-btn.correct {
             background: #dcfce7 !important;
             border-color: #16a34a !important;
             color: #15803d !important;
             font-weight: 600;
         }
-
         .quiz-option-btn.incorrect {
             background: #fee2e2 !important;
             border-color: #ef4444 !important;
@@ -216,7 +217,6 @@ $quizQuestions = [
 </head>
 <body>
 
-<!-- NAVIGATION BAR -->
 <nav class="navbar navbar-speech sticky-top mb-4">
     <div class="container">
         <a class="navbar-brand brand-font fs-3 text-success d-flex align-items-center gap-2" href="<?php echo htmlspecialchars($dashboardUrl); ?>">
@@ -232,8 +232,6 @@ $quizQuestions = [
 </nav>
 
 <div class="container">
-    
-    <!-- HEADER HERO BANNER -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="p-4 p-md-5 rounded-4 bg-white border border-success-subtle shadow-sm text-center text-md-start d-md-flex align-items-center justify-content-between">
@@ -254,8 +252,6 @@ $quizQuestions = [
     </div>
 
     <div class="row g-4">
-        
-        <!-- LEFT COLUMN: GRAMMAR TOPIC CARDS -->
         <div class="col-lg-7">
             <h4 class="fw-bold text-dark mb-3 brand-font">
                 <i class="fa-solid fa-book text-success me-2"></i>Core Grammar Lessons
@@ -317,7 +313,6 @@ $quizQuestions = [
             <?php endforeach; ?>
         </div>
 
-        <!-- RIGHT COLUMN: INTERACTIVE QUIZ PRACTICE -->
         <div class="col-lg-5">
             <h4 class="fw-bold text-dark mb-3 brand-font">
                 <i class="fa-solid fa-puzzle-piece text-success me-2"></i>Quick Knowledge Check
@@ -332,9 +327,7 @@ $quizQuestions = [
 
                     <h5 id="quizQuestionText" class="fw-bold text-dark mb-4 brand-font">Loading question...</h5>
 
-                    <div id="quizOptionsContainer" class="mb-3">
-                        <!-- Dynamically populated options -->
-                    </div>
+                    <div id="quizOptionsContainer" class="mb-3"></div>
 
                     <div id="quizFeedbackBox" class="alert alert-info d-none mt-3 rounded-4 small">
                         <strong>Explanation:</strong> <span id="quizExplanationText"></span>
@@ -355,15 +348,11 @@ $quizQuestions = [
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
-<!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    // Speech Synthesis Integration
     const synth = window.speechSynthesis;
     function speakText(text) {
         if (!synth) return;
@@ -377,7 +366,6 @@ $quizQuestions = [
         speakText("Welcome to the Grammar Mastery Lab. Learn core grammar principles, verb modifications, and plural structures to boost your speech accuracy!");
     });
 
-    // Interactive Quiz Data & Logic safely injected via JSON
     const quizData = <?php echo json_encode($quizQuestions); ?>;
     let currentQuizIndex = 0;
     let score = 0;
@@ -394,12 +382,35 @@ $quizQuestions = [
     const quizCompleteScreen = document.getElementById('quizCompleteScreen');
     const finalScoreText = document.getElementById('finalScoreText');
 
+    function saveQuizProgress(finalScore, totalItems) {
+        const formData = new URLSearchParams();
+        formData.append('action', 'save_progress');
+        formData.append('score', finalScore);
+        formData.append('total', totalItems);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data.message);
+        })
+        .catch(error => {
+            console.error('Error saving progress:', error);
+        });
+    }
+
     function loadQuizQuestion() {
         if (currentQuizIndex >= quizData.length) {
             quizCardBody.classList.add('d-none');
             quizCompleteScreen.classList.remove('d-none');
             finalScoreText.textContent = `You scored ${score} out of ${quizData.length} correct!`;
             speakText(`Quiz completed! You scored ${score} out of ${quizData.length}. Great job!`);
+            saveQuizProgress(score, quizData.length);
             return;
         }
 
@@ -459,7 +470,6 @@ $quizQuestions = [
         loadQuizQuestion();
     }
 
-    // Initialize Quiz on Load
     loadQuizQuestion();
 </script>
 </body>

@@ -3,7 +3,6 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 
-// Session & Role Guard
 if (!isset($_SESSION['user_id'])) {
     $loginUrl = defined('BASE_URL') ? BASE_URL . 'login.php' : '../login.php';
     header("Location: {$loginUrl}");
@@ -17,8 +16,27 @@ if (isset($_SESSION['role']) && $_SESSION['role'] !== 'student') {
     exit;
 }
 
+$userId = $_SESSION['user_id'];
 $studentName = $_SESSION['full_name'] ?? 'Learner';
 $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dashboard.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_calm_progress') {
+    header('Content-Type: application/json');
+    $activityType = filter_input(INPUT_POST, 'activity_type', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    
+    if ($activityType) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO student_progress (user_id, activity_type, score, total_items, percentage, updated_at) VALUES (?, ?, 1, 1, 100, NOW()) ON DUPLICATE KEY UPDATE score = score + 1, total_items = total_items + 1, percentage = 100, updated_at = NOW()");
+            $stmt->execute([$userId, 'calm_' . $activityType]);
+            echo json_encode(['status' => 'success', 'message' => 'Progress saved successfully.']);
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => 'Database error.']);
+        }
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid data.']);
+    }
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -26,13 +44,9 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calm Sensory Zone | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-
     <style>
         :root {
             --bg-calm: #f0fdfa;
@@ -40,25 +54,20 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             --teal-light: #ccfbf1;
             --card-radius: 24px;
         }
-
         body {
             background-color: var(--bg-calm);
             font-family: 'Poppins', sans-serif;
             color: #1e293b;
             padding-bottom: 80px;
         }
-
         h1, h2, h3, h4, .brand-font {
             font-family: 'Fredoka', cursive, sans-serif;
         }
-
         .navbar-calm {
             background: #ffffff;
             border-bottom: 2px solid #ccfbf1;
             padding: 14px 0;
         }
-
-        /* GUIDED BREATHING ORB */
         .breathing-container {
             background: #ffffff;
             border-radius: var(--card-radius);
@@ -69,7 +78,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             position: relative;
             overflow: hidden;
         }
-
         .orb-wrapper {
             width: 240px;
             height: 240px;
@@ -79,7 +87,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             align-items: center;
             justify-content: center;
         }
-
         .breathing-orb {
             width: 140px;
             height: 140px;
@@ -95,26 +102,21 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             font-size: 1.5rem;
             user-select: none;
         }
-
         .breathing-orb.inhale {
             transform: scale(1.65);
             box-shadow: 0 0 70px rgba(45, 212, 191, 0.8);
             background: radial-gradient(circle, #38bdf8 0%, #0284c7 100%);
         }
-
         .breathing-orb.hold {
             transform: scale(1.65);
             box-shadow: 0 0 80px rgba(251, 191, 36, 0.7);
             background: radial-gradient(circle, #fbbf24 0%, #d97706 100%);
         }
-
         .breathing-orb.exhale {
             transform: scale(1);
             box-shadow: 0 0 30px rgba(45, 212, 191, 0.4);
             background: radial-gradient(circle, #2dd4bf 0%, #0d9488 100%);
         }
-
-        /* SOUND GENERATOR CARDS */
         .sound-card {
             background: #ffffff;
             border-radius: 20px;
@@ -124,19 +126,16 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             cursor: pointer;
             transition: all 0.25s ease;
         }
-
         .sound-card:hover {
             transform: translateY(-4px);
             border-color: #0d9488;
             box-shadow: 0 10px 20px rgba(13, 148, 136, 0.1);
         }
-
         .sound-card.active {
             border-color: #0d9488;
             background-color: #ccfbf1;
             box-shadow: 0 10px 25px rgba(13, 148, 136, 0.2);
         }
-
         .sound-icon {
             width: 60px;
             height: 60px;
@@ -150,13 +149,10 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             margin: 0 auto 12px;
             transition: all 0.3s ease;
         }
-
         .sound-card.active .sound-icon {
             background: #0d9488;
             color: #ffffff;
         }
-
-        /* SENSORY POPPING GRID */
         .fidget-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -164,7 +160,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             max-width: 320px;
             margin: 0 auto;
         }
-
         .fidget-bubble {
             aspect-ratio: 1;
             border-radius: 50%;
@@ -174,7 +169,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.08);
             transition: all 0.15s ease;
         }
-
         .fidget-bubble:active, .fidget-bubble.popped {
             transform: scale(0.92);
             background: linear-gradient(145deg, #818cf8, #6366f1);
@@ -184,7 +178,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
 </head>
 <body>
 
-<!-- NAVIGATION BAR -->
 <nav class="navbar navbar-calm sticky-top mb-4">
     <div class="container">
         <a class="navbar-brand brand-font fs-3 text-teal d-flex align-items-center gap-2" href="<?php echo htmlspecialchars($dashboardUrl); ?>" style="color: #0d9488;">
@@ -199,8 +192,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
 
 <div class="container">
     <div class="row g-4">
-
-        <!-- GUIDED BREATHING EXERCISE -->
         <div class="col-lg-6">
             <div class="breathing-container h-100">
                 <span class="badge bg-teal-subtle rounded-pill px-3 py-2 fw-semibold fs-6 mb-2" style="background: #ccfbf1; color: #0f766e;">
@@ -228,11 +219,8 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             </div>
         </div>
 
-        <!-- AMBIENT SOUNDS & SENSORY FIDGET -->
         <div class="col-lg-6">
             <div class="row g-4">
-                
-                <!-- Ambient Soothing Sounds -->
                 <div class="col-12">
                     <div class="bg-white rounded-4 p-4 border border-2 border-light-subtle shadow-sm">
                         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -265,7 +253,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
                     </div>
                 </div>
 
-                <!-- Grounding Fidget Pop Grid -->
                 <div class="col-12">
                     <div class="bg-white rounded-4 p-4 border border-2 border-light-subtle shadow-sm text-center">
                         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -277,7 +264,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
                         <p class="text-muted small mb-3">Tap bubbles for satisfying tactile sensory relaxation</p>
 
                         <div class="fidget-grid" id="fidgetGrid">
-                            <!-- 12 Fidget Bubbles -->
                             <div class="fidget-bubble" onclick="popBubble(this)"></div>
                             <div class="fidget-bubble" onclick="popBubble(this)"></div>
                             <div class="fidget-bubble" onclick="popBubble(this)"></div>
@@ -293,20 +279,16 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
-
     </div>
 </div>
 
-<!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    // --- GUIDED BREATHING LOGIC ---
     let breathingInterval = null;
     let isBreathingActive = false;
+    let completedBreathingCycles = 0;
 
     const orb = document.getElementById('breathingOrb');
     const instruction = document.getElementById('breathInstruction');
@@ -316,23 +298,43 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
     btnStart.addEventListener('click', startBreathingCycle);
     btnStop.addEventListener('click', stopBreathingCycle);
 
+    function saveProgress(activityType) {
+        const formData = new URLSearchParams();
+        formData.append('action', 'save_calm_progress');
+        formData.append('activity_type', activityType);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data.message);
+        })
+        .catch(error => {
+            console.error('Error saving progress:', error);
+        });
+    }
+
     function startBreathingCycle() {
         if (isBreathingActive) return;
         isBreathingActive = true;
         btnStart.disabled = true;
         btnStop.disabled = false;
+        completedBreathingCycles = 0;
 
         runCycle();
-        breathingInterval = setInterval(runCycle, 12000); // 4s inhale + 4s hold + 4s exhale
+        breathingInterval = setInterval(runCycle, 12000);
     }
 
     function runCycle() {
-        // Phase 1: Inhale (4s)
         orb.className = 'breathing-orb inhale';
         orb.textContent = 'Inhale';
         instruction.textContent = '🌬️ Breathe in slowly...';
 
-        // Phase 2: Hold (4s)
         setTimeout(() => {
             if (!isBreathingActive) return;
             orb.className = 'breathing-orb hold';
@@ -340,12 +342,15 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
             instruction.textContent = '⏸️ Gently hold your breath...';
         }, 4000);
 
-        // Phase 3: Exhale (4s)
         setTimeout(() => {
             if (!isBreathingActive) return;
             orb.className = 'breathing-orb exhale';
             orb.textContent = 'Exhale';
             instruction.textContent = '😮‍💨 Slowly blow all the air out...';
+            completedBreathingCycles++;
+            if (completedBreathingCycles % 2 === 0) {
+                saveProgress('breathing');
+            }
         }, 8000);
     }
 
@@ -360,11 +365,10 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
         instruction.textContent = 'Tap Start to begin';
     }
 
-
-    // --- SYNTHESIZED AMBIENT SOUND GENERATOR (WEB AUDIO API) ---
     let audioCtx = null;
     let activeSource = null;
     let currentSoundType = null;
+    let soundLogged = false;
 
     function initAudioContext() {
         if (!audioCtx) {
@@ -378,7 +382,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
     function toggleSound(type) {
         initAudioContext();
 
-        // Clear active selection if same button clicked
         if (currentSoundType === type) {
             stopAmbientSound();
             return;
@@ -386,15 +389,19 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
 
         stopAmbientSound();
         currentSoundType = type;
+        soundLogged = false;
 
-        // Highlight Active UI
         document.querySelectorAll('.sound-card').forEach(c => c.classList.remove('active'));
         const activeCard = document.getElementById(`card${type.charAt(0).toUpperCase() + type.slice(1)}`);
         if (activeCard) activeCard.classList.add('active');
 
         document.getElementById('soundStatus').textContent = `Playing ${type}`;
+        
+        if (!soundLogged) {
+            saveProgress('sound_' + type);
+            soundLogged = true;
+        }
 
-        // Create Pink/White Noise Synthesizer for Ambient Sound
         const bufferSize = audioCtx.sampleRate * 2;
         const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
@@ -402,7 +409,6 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
         let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
         for (let i = 0; i < bufferSize; i++) {
             let white = Math.random() * 2 - 1;
-            // Pink noise filtering for soothing acoustics
             b0 = 0.99886 * b0 + white * 0.0555179;
             b1 = 0.99332 * b1 + white * 0.0750759;
             b2 = 0.96900 * b2 + white * 0.1538520;
@@ -453,17 +459,23 @@ $dashboardUrl = defined('BASE_URL') ? BASE_URL . 'student/dashboard.php' : 'dash
         document.getElementById('soundStatus').textContent = 'Off';
     }
 
+    let poppedCount =-0;
 
-    // --- SENSORY BUBBLE POP LOGIC ---
     function popBubble(element) {
         if (!element.classList.contains('popped')) {
             element.classList.add('popped');
             playPopSound();
+            poppedCount++;
+            if (poppedCount >= 4) {
+                saveProgress('fidget_pop');
+                poppedCount = 0;
+            }
         }
     }
 
     function resetBubbles() {
         document.querySelectorAll('.fidget-bubble').forEach(b => b.classList.remove('popped'));
+        poppedCount = 0;
     }
 
     function playPopSound() {
