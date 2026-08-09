@@ -3,7 +3,7 @@
     <div class="container">
         <div class="row g-4">
             <div class="col-lg-4 col-md-6">
-                <h4 class="text-primary fw-bold mb-3"><i class="fa-solid fa-brain me-2"></i>AutiLearn AI</h4>
+                <h4 class="text-primary fw-bold mb-3"><i class="fa-solid fa-brain me-2"></i>Spark Steps</h4>
                 <p class="text-white-50">An AI-powered specialized educational assistant empowering children with autism through high-visual learning, gentle voice guidance, and emotion monitoring.</p>
                 <div class="d-flex gap-3 mt-3">
                     <a href="#" class="btn btn-outline-light btn-sm rounded-circle" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
@@ -29,7 +29,7 @@
 
         <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center text-white-50 small">
            
-            <p class="mb-0">Designed for Unite Entity Team</p>
+            <p class="mb-0">Designed by Unite Entity Team</p>
         </div>
     </div>
 </footer>

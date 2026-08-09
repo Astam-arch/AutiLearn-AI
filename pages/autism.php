@@ -115,7 +115,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
                 <span class="sensory-pill-badge mb-2">Built-in Accommodations</span>
-                <h2 class="display-6 fw-bold mb-4">How AutiLearn AI Maintains Sensory Balance</h2>
+                <h2 class="display-6 fw-bold mb-4">How Spark Steps Maintains Sensory Balance ?</h2>
 
                 <div class="checklist-item">
                     <div class="checklist-icon"><i class="fa-solid fa-sliders"></i></div>

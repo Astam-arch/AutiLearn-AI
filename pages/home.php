@@ -138,16 +138,16 @@
     <div class="container">
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right" data-aos-duration="1000">
-                <span class="badge-sensory mb-3"><i class="fa-solid fa-sparkles me-2"></i> Sensory-Friendly AI Platform</span>
+                <span class="badge-sensory mb-3"><i class="fa-solid fa-sparkles me-2"></i> Spark Steps Platform</span>
                 <h1 class="hero-title">
                     Empowering Every <span>Autistic Child</span> To Learn At Their Own Pace
                 </h1>
                 <p class="hero-subtitle">
-                    Ascend Kids Development combines picture-based communication (PECS), adaptive speech recognition, and real-time emotion detection to deliver calm, engaging, and personalized education.
+                    Spark Steps Development combines picture exchange communication system (PECS), adaptive speech recognition, and real-time emotion detection to deliver calm, engaging, and personalized education.
                 </p>
                 <div class="d-flex flex-wrap gap-3 mt-4 justify-content-center justify-content-lg-start">
                     <a href="register.php" class="btn btn-custom-primary btn-lg">
-                        <i class="fa-solid fa-rocket"></i> Start Free Trial
+                        <i class="fa-solid fa-rocket"></i> Tap here to learn
                     </a>
                     <a href="pages/about.php" class="btn btn-custom-outline btn-lg">
                         <i class="fa-solid fa-circle-play"></i> Watch Overview
@@ -157,7 +157,7 @@
 
             <div class="col-lg-6 text-center" data-aos="fade-left" data-aos-duration="1000">
                 <div class="hero-img-wrapper d-inline-block">
-                    <img src="assets/images/hero.png" alt="Ascend Kids Development Learning Experience" class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=800&q=80'">
+                    <img src="assets/images/hero.png" alt="Spark Steps Development Learning Experience" class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=800&q=80'">
                 </div>
             </div>
         </div>
@@ -170,7 +170,7 @@
     <div class="container py-4">
         <div class="text-center mb-5" data-aos="fade-up">
             
-            <h2 class="display-5 fw-bold">Why Choose Ascend Kids Development?</h2>
+            <h2 class="display-5 fw-bold">Why Choose Spark Steps Development?</h2>
             <p class="text-muted mx-auto" style="max-width: 650px;">Traditional methods can lead to sensory overload. We build learning around predictable routines, high-visual feedback, and soothing praise.</p>
         </div>
 
@@ -249,7 +249,7 @@
     <div class="container py-4">
         <div class="text-center mb-5" data-aos="fade-up">
             <span class="badge-sensory mb-2">Step-by-Step Learning</span>
-            <h2 class="fw-bold">How AutiLearn Works</h2>
+            <h2 class="fw-bold">How Spark Steps Works ?</h2>
         </div>
 
         <div class="row g-4 text-center">

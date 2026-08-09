@@ -430,11 +430,11 @@ require_once __DIR__ . '/config.php';
         >
             <img 
                 src="<?php echo BASE_URL; ?>assets/icons/logo.png"
-                alt="Ascend Kids Development Logo"
+                alt="Spark Steps Logo"
                 class="brand-logo"
             >
 
-            <span>Ascend Kids Development</span>
+            <span>Spark Steps</span>
         </a>
 
 

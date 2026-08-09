@@ -66,7 +66,7 @@ require_once __DIR__ . '/../includes/header.php';
         <span class="badge-sensory mb-3" data-aos="fade-down"><i class="fa-solid fa-heart me-2"></i> Our Purpose & Passion</span>
         <h1 class="display-4 fw-bold mb-3" data-aos="fade-up">Building Education Where <br><span class="text-primary">Every Mind Thrives</span></h1>
         <p class="text-muted mx-auto lead" style="max-width: 720px;" data-aos="fade-up" data-aos-delay="100">
-            AutiLearn AI was born from a fundamental belief: children on the autism spectrum don't have learning deficits—they simply have unique ways of processing information.
+            Spark Steps was born from a fundamental belief: children on the autism spectrum don't have learning deficits—they simply have unique ways of processing information.
         </p>
     </div>
 </section>
@@ -77,7 +77,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="row align-items-center g-5">
             <div class="col-lg-6" data-aos="fade-right">
                 <div class="about-img-box">
-                    <img src="../assets/images/hero.png" alt="Children Learning with AutiLearn AI" class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80'">
+                    <img src="../assets/images/hero.png" alt="Children Learning with Spark Steps." class="img-fluid" onerror="this.src='https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80'">
                     <div class="experience-badge d-none d-md-block">
                         <h3 class="fw-bold text-primary mb-0">100%</h3>
                         <p class="mb-0 text-muted small fw-semibold">Sensory Inclusive Design</p>
@@ -92,7 +92,7 @@ require_once __DIR__ . '/../includes/header.php';
                     Traditional classrooms rely heavily on auditory lectures and rigid timing. For an autistic child, this environment can spark sensory overload, frustration, and withdrawal.
                 </p>
                 <p class="text-muted">
-                    AutiLearn AI combines <strong>Picture Exchange Communication Systems (PECS)</strong>, forgiving voice recognition, and real-time emotion monitoring to craft a personalized learning standard tailored to each child's pace.
+                    Spark Steps combines <strong>Picture Exchange Communication Systems (PECS)</strong>, forgiving voice recognition, and real-time emotion monitoring to craft a personalized learning standard tailored to each child's pace.
                 </p>
 
                 <div class="row g-3 mt-2">
@@ -132,7 +132,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="text-center mb-5" data-aos="fade-up">
             <span class="badge-sensory mb-2">Our Methodology</span>
             <h2 class="fw-bold">Designed Around Four Core Pillars</h2>
-            <p class="text-muted">Every feature in AutiLearn AI serves a psychological and sensory purpose.</p>
+            <p class="text-muted">Every feature in Spark Steps serves a psychological and sensory purpose.</p>
         </div>
 
         <div class="row g-4">

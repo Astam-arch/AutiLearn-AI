@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $insertLog->execute([$targetChildId, $parentId, $activityType, $title, $description, $durationMins, $starsEarned, $icon, $color]);
                 
-                // 2. Insert or Update user_progress so it registers directly as a completed lesson in student profile records
+                // 2. Insert or Update user_progress
                 try {
                     $checkProg = $pdo->prepare("SELECT id FROM user_progress WHERE user_id = ? AND (lesson_title = ? OR module_title = ?) LIMIT 1");
                     $checkProg->execute([$targetChildId, $title, $title]);
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $ins->execute([$targetChildId, $title, $title]);
                     }
                 } catch (Exception $ex) {
-                    // Ignore if user_progress schema lacks columns
+                    // Ignore if schema lacks columns
                 }
 
                 // 3. Increment stars for the user
@@ -160,17 +160,15 @@ if ($activeChildId > 0) {
         $isCurrentlyPlaying = false;
     }
 
-    // B. Completed Lessons Count (Aggregating user_progress + activity_logs + student progress columns)
+    // B. Completed Lessons Count
     try {
         $lessonCount1 = 0;
         $lessonCount2 = 0;
         
-        // Check user_progress
         $stmt1 = $pdo->prepare("SELECT COUNT(*) FROM user_progress WHERE user_id = ? AND (status = 'completed' OR is_completed = 1)");
         $stmt1->execute([$activeChildId]);
         $lessonCount1 = intval($stmt1->fetchColumn());
 
-        // Check activity_logs for lesson/module type
         $stmt2 = $pdo->prepare("SELECT COUNT(*) FROM activity_logs WHERE user_id = ? AND (activity_type = 'lesson' OR activity_type = 'module')");
         $stmt2->execute([$activeChildId]);
         $lessonCount2 = intval($stmt2->fetchColumn());
@@ -180,7 +178,7 @@ if ($activeChildId > 0) {
         $completedLessons = 0;
     }
 
-    // C. Speech Clarity Score (Average accuracy from speech logs)
+    // C. Speech Clarity Score
     try {
         $speechStmt = $pdo->prepare("SELECT AVG(accuracy_score) as avg_acc FROM speech_logs WHERE user_id = ?");
         $speechStmt->execute([$activeChildId]);
@@ -209,7 +207,6 @@ if ($activeChildId > 0) {
         if ($starRes && $starRes['total_stars'] !== null) {
             $weeklyStars = intval($starRes['total_stars']);
         } else {
-            // Fallback to user stars column if available
             $userStarStmt = $pdo->prepare("SELECT stars FROM users WHERE id = ? LIMIT 1");
             $userStarStmt->execute([$activeChildId]);
             $uStars = $userStarStmt->fetchColumn();
@@ -221,7 +218,6 @@ if ($activeChildId > 0) {
         $weeklyStars = 0;
     }
 
-    // Calculate dynamic weekly goal percentage (target: 50 stars)
     $weeklyGoalPct = min(100, round(($weeklyStars / 50) * 100));
 
     // F. Fetch Real Speech Logs
@@ -261,7 +257,7 @@ if (!function_exists('timeAgo')) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent Live Dashboard | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Parent Live Dashboard | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
     <!-- Auto-refresh every 20 seconds for instant live synchronization -->
     <meta http-equiv="refresh" content="20">
     <!-- Bootstrap 5 CSS -->
@@ -372,7 +368,7 @@ if (!function_exists('timeAgo')) {
 <nav class="navbar navbar-parent sticky-top mb-4 no-print">
     <div class="container d-flex align-items-center justify-content-between">
         <a class="navbar-brand brand-font fs-3 text-primary d-flex align-items-center gap-2" href="#">
-            <i class="fa-solid fa-chart-line text-primary fs-2"></i> AutiLearn <span class="fs-5 text-secondary">Parent Portal</span>
+            <i class="fa-solid fa-chart-line text-primary fs-2"></i> Spark Steps <span class="fs-5 text-secondary">Parent Portal</span>
         </a>
         
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -627,44 +623,38 @@ if (!function_exists('timeAgo')) {
         <form action="" method="POST" class="modal-content rounded-4 border-0 shadow-lg">
             <input type="hidden" name="action" value="log_activity">
             <input type="hidden" name="child_id" value="<?php echo $activeChildId; ?>">
-            
             <div class="modal-header border-0 pb-0">
-                <h4 class="brand-font fw-bold text-dark m-0"><i class="fa-solid fa-plus-circle text-primary me-2"></i>Log Completed Lesson / Activity</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="brand-font fw-bold text-dark"><i class="fa-solid fa-plus-circle text-primary me-2"></i>Log Lesson or Activity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            
-            <div class="modal-body py-4">
+            <div class="modal-body py-3">
                 <div class="mb-3">
-                    <label class="form-label fw-semibold small">Activity / Completion Type</label>
-                    <select name="activity_type" class="form-select rounded-3 py-2">
-                        <option value="lesson">Lesson Completed</option>
-                        <option value="module">Module Completed</option>
-                        <option value="game">Learning Game Played</option>
+                    <label class="form-label small fw-semibold text-secondary">Activity Type</label>
+                    <select name="activity_type" class="form-select rounded-3">
+                        <option value="lesson">Lesson / Module</option>
                         <option value="speech">Speech Practice</option>
-                        <option value="sensory">Sensory Relaxation Session</option>
+                        <option value="sensory">Sensory Calm Session</option>
+                        <option value="game">Learning Game</option>
                     </select>
                 </div>
-
                 <div class="mb-3">
-                    <label class="form-label fw-semibold small">Lesson / Module Title</label>
-                    <input type="text" name="title" class="form-control rounded-3 py-2" placeholder="e.g. Emotion Matching Level 1" required>
+                    <label class="form-label small fw-semibold text-secondary">Activity / Lesson Title</label>
+                    <input type="text" name="title" class="form-control rounded-3" placeholder="e.g., Identifying Basic Emotions" required>
                 </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
-                        <label class="form-label fw-semibold small">Duration (Mins)</label>
-                        <input type="number" name="duration_minutes" class="form-control rounded-3 py-2" value="10" min="1" required>
-                    </div> 
-                    <div class="col-6">
-                        <label class="form-label fw-semibold small">Stars Earned</label>
-                        <input type="number" name="stars_earned" class="form-control rounded-3 py-2" value="1" min="1" max="5" required>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Duration (Minutes)</label>
+                        <input type="number" name="duration_minutes" class="form-control rounded-3" value="10" min="1" max="120">
+                    </div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Stars Earned</label>
+                        <input type="number" name="stars_earned" class="form-control rounded-3" value="3" min="1" max="10">
                     </div>
                 </div>
             </div>
-            
-            <div class="modal-footer border-0 bg-light rounded-bottom-4 py-3">
-                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-success rounded-pill px-4"><i class="fa-solid fa-check me-1"></i> Save Progress</button>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Save Activity Log</button>
             </div>
         </form>
     </div>
@@ -675,33 +665,30 @@ if (!function_exists('timeAgo')) {
     <div class="modal-dialog modal-dialog-centered">
         <form action="" method="POST" class="modal-content rounded-4 border-0 shadow-lg">
             <input type="hidden" name="action" value="add_child_quick">
-            
             <div class="modal-header border-0 pb-0">
-                <h4 class="brand-font fw-bold text-dark m-0"><i class="fa-solid fa-user-plus text-primary me-2"></i>Add Child Profile</h4>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="brand-font fw-bold text-dark"><i class="fa-solid fa-user-plus text-primary me-2"></i>Link New Student Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            
-            <div class="modal-body py-4">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold small">First Name</label>
-                        <input type="text" name="first_name" class="form-control rounded-3 py-2" placeholder="Child's first name" required>
+            <div class="modal-body py-3">
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-semibold text-secondary">First Name</label>
+                        <input type="text" name="first_name" class="form-control rounded-3" required>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold small">Last Name</label>
-                        <input type="text" name="last_name" class="form-control rounded-3 py-2" placeholder="Last name">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label fw-semibold small">Student Account Email</label>
-                        <input type="email" name="email" class="form-control rounded-3 py-2" placeholder="student@autilearn.com" required>
-                        <div class="form-text small">Used for student sign-in access.</div>
+                    <div class="col-6 mb-3">
+                        <label class="form-label small fw-semibold text-secondary">Last Name</label>
+                        <input type="text" name="last_name" class="form-control rounded-3">
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold text-secondary">Student Login Email</label>
+                    <input type="email" name="email" class="form-control rounded-3" placeholder="student@example.com" required>
+                    <div class="form-text small text-muted mt-1">Default password assigned will be: <code>AutiLearn123!</code></div>
+                </div>
             </div>
-            
-            <div class="modal-footer border-0 bg-light rounded-bottom-4 py-3">
-                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary rounded-pill px-4"><i class="fa-solid fa-user-plus me-1"></i> Create Student Account</button>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">Create & Link Student</button>
             </div>
         </form>
     </div>

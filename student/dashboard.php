@@ -62,7 +62,7 @@ $safeTotalActivities = ($totalActivities > 0) ? $totalActivities : 1;
 $progressPercentage = min(100, max(0, round(($completedActivities / $safeTotalActivities) * 100)));
 
 $logoutUrl = defined('BASE_URL') ? BASE_URL . 'logout.php' : '../logout.php';
-$siteName  = defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI';
+$siteName  = defined('SITE_NAME') ? SITE_NAME : 'Spark Steps';
 ?>
 
 <!DOCTYPE html>
@@ -272,7 +272,7 @@ $siteName  = defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI';
             <div class="brand-icon-box">
                 <i class="fa-solid fa-brain fs-5"></i>
             </div>
-            <span>Auti<span class="text-primary">Learn</span></span>
+            <span>Spark <span class="text-primary">Steps</span></span>
         </a>
         <div class="d-flex align-items-center gap-3">
             <span class="d-none d-md-inline fw-medium text-secondary">
