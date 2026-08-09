@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <i class="fa-solid fa-brain me-1"></i> Spark Steps
             </a>
             <h4 class="mt-3 fw-bold text-dark">Welcome Back</h4>
-            <p class="text-secondary small">Sign in to access your interactive portal</p>
+            <p class="text-secondary small">Sign in to access your learning path.</p>
         </div>
 
         <?php if (!empty($_GET['registered'])): ?>
