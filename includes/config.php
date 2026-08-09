@@ -19,8 +19,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // 3. System Constants
-define('SITE_NAME', 'AutiLearn AI');
-define('SITE_TAGLINE', 'Empowering Neurodiverse Children Through Inclusive AI Learning');
+define('SITE_NAME', 'Spark Steps');
+define('SITE_TAGLINE', 'Empowering Neurodiverse Children Through Inclusive Spark Steps Learning.');
 
 // 4. Robust BASE_URL Resolution
 $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";

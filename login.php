@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Login | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-card">
         <div class="text-center mb-4">
             <a href="index.php" class="text-decoration-none h3 fw-bold text-success brand-font">
-                <i class="fa-solid fa-brain me-1"></i> AutiLearn
+                <i class="fa-solid fa-brain me-1"></i> Spark Steps
             </a>
             <h4 class="mt-3 fw-bold text-dark">Welcome Back</h4>
             <p class="text-secondary small">Sign in to access your interactive portal</p>

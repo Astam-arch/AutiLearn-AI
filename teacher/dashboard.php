@@ -124,7 +124,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instructor Portal | <?php echo defined('SITE_NAME') ? SITE_NAME : 'AutiLearn AI'; ?></title>
+    <title>Instructor Portal | <?php echo defined('SITE_NAME') ? SITE_NAME : 'Spark Steps'; ?></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -134,28 +134,37 @@ try {
 
     <style>
         :root {
-            --bg-main: #f8fafc;
-            --primary-color: #6366f1;
-            --primary-hover: #4f46e5;
-            --primary-light: #e0e7ff;
-            --primary-glow: rgba(99, 102, 241, 0.25);
-            --card-radius: 24px;
+            /* Calm, professional palette — teal + soft blue, built for readability */
+            --bg-main: #f4f7fb;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #dbeafe;
+            --primary-glow: rgba(37, 99, 235, 0.18);
+            --teal: #0d9488;
+            --teal-light: #ccfbf1;
+
+            --card-radius: 18px;
             --border-color: #e2e8f0;
             --text-dark: #0f172a;
             --text-muted: #64748b;
-            
-            --grad-1: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-            --grad-2: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-            --grad-3: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            --grad-4: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            --grad-5: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+
+            --success: #16a34a;
+            --success-light: #dcfce7;
+            --warning: #d97706;
+            --warning-light: #fef3c7;
+            --danger: #dc2626;
+            --danger-light: #fee2e2;
+            --info: #0284c7;
+            --info-light: #e0f2fe;
+
+            --grad-primary: linear-gradient(135deg, #2563eb 0%, #0d9488 100%);
         }
 
         body {
             background-color: var(--bg-main);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-dark);
-            padding-bottom: 120px;
+            padding-bottom: 80px;
             font-size: 1rem;
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
@@ -163,10 +172,12 @@ try {
 
         h1, h2, h3, h4, h5, .brand-font {
             font-family: 'Outfit', sans-serif;
-            letter-spacing: -0.025em;
+            letter-spacing: -0.02em;
         }
 
-        /* Ambient Background Glows */
+        a { color: var(--primary-color); }
+
+        /* Subtle ambient background — kept light so it never competes with content */
         .ambient-bg {
             position: fixed;
             top: 0;
@@ -179,299 +190,305 @@ try {
         }
         .ambient-circle {
             position: absolute;
-            filter: blur(120px);
-            opacity: 0.12;
+            filter: blur(110px);
+            opacity: 0.10;
             border-radius: 50%;
-            animation: floatOrb 10s ease-in-out infinite alternate;
         }
-        .c1 { width: 450px; height: 450px; background: #6366f1; top: -100px; left: -100px; }
-        .c2 { width: 500px; height: 500px; background: #ec4899; bottom: -100px; right: -100px; animation-delay: -5s; }
+        .c1 { width: 420px; height: 420px; background: var(--primary-color); top: -120px; left: -100px; }
+        .c2 { width: 420px; height: 420px; background: var(--teal); bottom: -120px; right: -100px; }
 
-        @keyframes floatOrb {
-            0% { transform: translateY(0px) scale(1); }
-            100% { transform: translateY(30px) scale(1.08); }
-        }
-
-        /* Glassmorphism Navigation */
+        /* NAVIGATION */
         .navbar-teacher {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-            padding: 16px 0;
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            padding: 14px 0;
             position: sticky;
             top: 0;
             z-index: 1030;
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
-            transition: all 0.3s ease;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
         }
 
         .brand-icon-box {
-            background: var(--grad-1);
-            width: 48px;
-            height: 48px;
-            border-radius: 16px;
+            background: var(--grad-primary);
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #fff;
-            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .navbar-brand:hover .brand-icon-box {
-            transform: rotate(10deg) scale(1.1);
+            flex-shrink: 0;
         }
 
-        /* Vibrant Hero Banner */
+        .brand-title { font-size: 1.3rem; }
+        .brand-subtitle { font-size: 0.72rem; letter-spacing: 1px; }
+
+        .online-badge {
+            background: var(--success-light);
+            border: 1px solid #bbf7d0;
+            border-radius: 50rem;
+            padding: 8px 16px;
+        }
+
+        .avatar-circle {
+            width: 38px;
+            height: 38px;
+            background: var(--primary-light);
+            color: var(--primary-hover);
+        }
+
+        /* HERO BANNER */
         .hero-banner {
-            background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%);
+            background: var(--grad-primary);
             border-radius: var(--card-radius);
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            box-shadow: 0 20px 50px -15px rgba(99, 102, 241, 0.12);
+            box-shadow: 0 12px 30px -10px rgba(37, 99, 235, 0.35);
             position: relative;
             overflow: hidden;
-            padding: 50px !important;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
-        }
-        .hero-banner:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 25px 60px -15px rgba(99, 102, 241, 0.2);
+            padding: 40px !important;
+            color: #ffffff;
         }
         .hero-banner::after {
             content: '';
             position: absolute;
-            top: 0;
-            right: 0;
-            width: 350px;
-            height: 100%;
-            background: radial-gradient(circle at right, rgba(168, 85, 247, 0.15) 0%, transparent 70%);
+            top: -60px;
+            right: -60px;
+            width: 260px;
+            height: 260px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
             pointer-events: none;
         }
+        .hero-badge {
+            background: rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .hero-banner p { color: rgba(255, 255, 255, 0.92); }
+        .hero-cta {
+            background: #ffffff;
+            color: var(--primary-hover) !important;
+            border: none;
+            font-weight: 700;
+            border-radius: 50rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+        }
+        .hero-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(0,0,0,0.2);
+            color: var(--primary-hover) !important;
+        }
 
-        /* Modern Elevated Stat Cards with Hover Animations */
+        /* STAT CARDS */
         .stat-card {
             background: #ffffff;
             border-radius: var(--card-radius);
-            padding: 28px;
-            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04);
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
             border: 1px solid var(--border-color);
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
             height: 100%;
-            position: relative;
-            overflow: hidden;
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: var(--grad-1);
-            opacity: 0;
-            transition: opacity 0.3s ease;
         }
         .stat-card:hover {
-            transform: translateY(-8px) scale(1.01);
-            box-shadow: 0 20px 40px -10px var(--primary-glow);
-            border-color: #a5b4fc;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 26px -8px rgba(15, 23, 42, 0.12);
         }
-        .stat-card:hover::before {
-            opacity: 1;
+        .stat-label {
+            font-size: 0.82rem;
+            letter-spacing: 0.04em;
         }
-
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+        }
         .stat-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             flex-shrink: 0;
-            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .stat-card:hover .stat-icon {
-            transform: scale(1.15) rotate(8deg);
         }
 
-        /* Dashboard Section Container */
+        /* SECTION CONTAINER */
         .dashboard-section {
             background: #ffffff;
             border-radius: var(--card-radius);
-            padding: 40px;
-            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04);
+            padding: 32px;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
             border: 1px solid var(--border-color);
-            margin-bottom: 35px;
-            transition: box-shadow 0.3s ease;
-        }
-        .dashboard-section:hover {
-            box-shadow: 0 15px 40px -8px rgba(0, 0, 0, 0.07);
+            margin-bottom: 28px;
         }
 
-        /* Interactive Quick Action Cards with Vivid Gradients */
+        /* QUICK ACTION CARDS */
         .quick-action-card {
             background: #ffffff;
             border: 1px solid var(--border-color);
             border-radius: var(--card-radius);
-            padding: 32px 24px;
+            padding: 26px 20px;
             text-align: center;
             color: var(--text-dark);
             font-weight: 700;
-            font-size: 1.1rem;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            display: block;
+            font-size: 1.05rem;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
             text-decoration: none;
             height: 100%;
-            box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.02);
-            position: relative;
-            overflow: hidden;
-            z-index: 1;
-        }
-        .quick-action-card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: var(--grad-1);
-            opacity: 0;
-            z-index: -1;
-            transition: opacity 0.4s ease;
         }
         .quick-action-card:hover {
-            color: #ffffff;
-            border-color: transparent;
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.4);
+            color: var(--primary-hover);
+            border-color: var(--primary-color);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 24px -8px var(--primary-glow);
         }
-        .quick-action-card:hover::before {
-            opacity: 1;
-        }
-        .quick-action-card i {
-            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
-        }
-        .quick-action-card:hover i {
-            transform: scale(1.25) rotate(10deg);
-            color: #ffffff !important;
+        .quick-action-card .qa-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
         }
 
-        /* Polished Table Styling */
+        /* TABLE */
         .table-custom th {
             background-color: #f8fafc;
             color: var(--text-muted);
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.06em;
             border-top: none;
             border-bottom: 2px solid var(--border-color);
-            padding: 18px 24px;
+            padding: 14px 18px;
+            white-space: nowrap;
         }
         .table-custom td {
-            padding: 20px 24px;
+            padding: 16px 18px;
             vertical-align: middle;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: var(--text-dark);
             border-bottom: 1px solid #f1f5f9;
         }
-        .table-custom tbody tr {
-            transition: all 0.25s ease;
-        }
         .table-custom tbody tr:hover {
             background-color: #f8fafc;
-            transform: scale(1.002);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         }
 
-        /* Search Bar & Pill Filters */
+        /* SEARCH & FILTERS */
         .search-box {
             border-radius: 50rem;
             border: 1px solid var(--border-color);
-            padding: 12px 20px;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            padding: 10px 18px;
             background-color: #f8fafc;
             color: var(--text-dark);
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
         .search-box:focus {
             background-color: #ffffff;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 5px var(--primary-glow);
-            transform: scale(1.01);
+            box-shadow: 0 0 0 4px var(--primary-glow);
         }
 
         .filter-pill {
             border-radius: 50rem;
-            font-size: 0.9rem;
-            padding: 8px 22px;
+            font-size: 0.85rem;
+            padding: 7px 18px;
             font-weight: 700;
-            border: 1px solid var(--border-color);
-            background: #ffffff;
+            border: 1px solid transparent;
+            background: transparent;
             color: var(--text-muted);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.2s ease;
         }
         .filter-pill.active, .filter-pill:hover {
-            background: var(--grad-1);
+            background: var(--primary-color);
             color: #ffffff;
-            border-color: transparent;
-            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
-            transform: translateY(-2px);
         }
 
-        /* Glowing Pulse Badge */
+        /* ONLINE PULSE */
         .online-pulse {
-            width: 10px;
-            height: 10px;
-            background-color: #10b981;
+            width: 9px;
+            height: 9px;
+            background-color: var(--success);
             border-radius: 50%;
             display: inline-block;
-            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
             animation: pulse-green 2s infinite;
         }
         @keyframes pulse-green {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6); }
+            70% { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
         }
 
-        /* Modern Animated Buttons */
+        /* BUTTONS */
         .btn-gradient {
-            background: var(--grad-1);
+            background: var(--grad-primary);
             color: #ffffff;
             border: none;
             border-radius: 50rem;
             font-weight: 700;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
         }
         .btn-gradient:hover {
             color: #ffffff;
-            transform: translateY(-3px) scale(1.03);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
             filter: brightness(1.05);
         }
         .btn-gradient:active {
-            transform: translateY(-1px) scale(1.01);
+            transform: translateY(0);
         }
 
-        /* Modern Modals */
+        /* MODALS */
         .modal-content {
             border-radius: var(--card-radius);
             border: 1px solid var(--border-color);
-            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.2);
-            padding: 10px;
-            animation: modalFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: translateY(20px) scale(0.96); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.2);
         }
 
-        /* Progress Bar Animation */
+        /* PROGRESS BAR */
         .progress-bar {
-            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
-            background: var(--grad-1) !important;
+            transition: width 0.8s ease;
+            background: var(--grad-primary) !important;
+        }
+
+        /* Badges */
+        .badge-soft-success { background: var(--success-light); color: var(--success); }
+        .badge-soft-info { background: var(--info-light); color: var(--info); }
+        .badge-soft-warning { background: var(--warning-light); color: var(--warning); }
+
+        /* RESPONSIVE ADJUSTMENTS */
+        @media (max-width: 991.98px) {
+            .hero-banner { padding: 32px !important; text-align: left; }
+            .hero-banner .display-5 { font-size: 1.8rem; }
+        }
+
+        @media (max-width: 767.98px) {
+            body { padding-bottom: 40px; }
+            .dashboard-section { padding: 22px; }
+            .hero-banner { padding: 26px !important; }
+            .hero-banner .display-5 { font-size: 1.5rem; }
+            .stat-value { font-size: 1.6rem; }
+            .stat-icon { width: 48px; height: 48px; font-size: 1.2rem; }
+            .quick-action-card { padding: 20px 14px; font-size: 0.95rem; }
+            .table-custom td, .table-custom th { padding: 12px; font-size: 0.85rem; }
+            .search-box { width: 100% !important; }
+        }
+
+        @media (max-width: 575.98px) {
+            .hero-banner .btn-gradient,
+            .hero-banner .hero-cta { width: 100%; }
+            .navbar .fw-bold.fs-6 { font-size: 0.85rem !important; }
         }
     </style>
 </head>
@@ -485,31 +502,31 @@ try {
 
 <!-- NAVIGATION BAR -->
 <nav class="navbar navbar-teacher mb-5">
-    <div class="container">
-        <a class="navbar-brand brand-font fs-3 text-dark fw-bold d-flex align-items-center gap-3 text-decoration-none" href="#">
+    <div class="container d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <a class="navbar-brand brand-font text-dark fw-bold d-flex align-items-center gap-3 text-decoration-none mb-0" href="#">
             <div class="brand-icon-box">
-                <i class="fa-solid fa-brain fs-4"></i>
+                <i class="fa-solid fa-brain fs-5"></i>
             </div>
             <div>
-                <span class="d-block lh-1 text-dark fw-extrabold" style="font-size: 1.4rem;">AutiLearn</span>
-                <span class="text-muted fw-bold" style="font-size: 0.75rem; letter-spacing: 1.2px;">INSTRUCTOR PORTAL</span>
+                <span class="d-block lh-1 text-dark fw-bold brand-title">Spark Steps</span>
+                <span class="text-muted fw-bold brand-subtitle text-uppercase">Instructor Portal</span>
             </div>
         </a>
-        <div class="d-flex align-items-center gap-3">
-            <div class="d-none d-sm-flex align-items-center gap-2 bg-white border px-3.5 py-2 rounded-pill shadow-sm">
+        <div class="d-flex align-items-center gap-2 gap-sm-3">
+            <div class="d-none d-sm-flex align-items-center gap-2 online-badge">
                 <span class="online-pulse"></span>
-                <span class="fw-bold text-dark fs-6"><?php echo $onlineNowCount; ?> Online Now</span>
+                <span class="fw-bold text-dark" style="font-size:0.9rem;"><?php echo $onlineNowCount; ?> Online Now</span>
             </div>
             <div class="dropdown">
-                <button class="btn btn-white border dropdown-toggle d-flex align-items-center gap-3 rounded-pill px-3.5 py-2 shadow-sm bg-white" type="button" data-bs-toggle="dropdown">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 38px; height: 38px; background: var(--primary-light); color: var(--primary-hover); font-size: 1rem;">
+                <button class="btn border dropdown-toggle d-flex align-items-center gap-2 rounded-pill px-3 py-2 bg-white" type="button" data-bs-toggle="dropdown">
+                    <div class="avatar-circle rounded-circle d-flex align-items-center justify-content-center fw-bold">
                         <?php echo strtoupper(substr($teacherName, 0, 1)); ?>
                     </div>
-                    <span class="fw-bold text-dark fs-6 d-none d-md-inline"><?php echo htmlspecialchars($teacherName); ?></span>
+                    <span class="fw-bold text-dark d-none d-md-inline" style="font-size:0.9rem;"><?php echo htmlspecialchars($teacherName); ?></span>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-lg border rounded-4 mt-3 p-2">
-                    <li><h6 class="dropdown-header text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Signed in as Instructor</h6></li>
-                    <li><a class="dropdown-item py-2 px-3 rounded-3 fw-bold text-danger mt-1 fs-6 transition-all" href="<?php echo htmlspecialchars($logoutUrl); ?>"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
+                <ul class="dropdown-menu dropdown-menu-end shadow border rounded-3 mt-2 p-2">
+                    <li><h6 class="dropdown-header text-uppercase text-muted fw-bold" style="font-size: 0.72rem;">Signed in as Instructor</h6></li>
+                    <li><a class="dropdown-item py-2 px-3 rounded-3 fw-bold text-danger mt-1" href="<?php echo htmlspecialchars($logoutUrl); ?>"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
                 </ul>
             </div>
         </div>
@@ -517,21 +534,21 @@ try {
 </nav>
 
 <div class="container">
-    
+
     <!-- WELCOME HERO BANNER -->
-    <div class="row mb-5">
+    <div class="row mb-4">
         <div class="col-12">
             <div class="hero-banner d-md-flex align-items-center justify-content-between">
                 <div class="mb-4 mb-md-0 z-1">
-                    <span class="badge rounded-pill px-3.5 py-2 fw-bold fs-6 mb-3 shadow-sm" style="background-color: var(--primary-light); color: var(--primary-hover);">
+                    <span class="badge hero-badge rounded-pill px-3 py-2 fw-bold mb-3" style="font-size:0.8rem;">
                         <i class="fa-solid fa-shield-halved me-2"></i> Live Session Command Center
                     </span>
-                    <h1 class="brand-font text-dark mb-2 fw-extrabold display-5">Welcome back, <?php echo htmlspecialchars($teacherName); ?>!</h1>
-                    <p class="text-muted mb-0 fs-5 fw-medium" style="max-width: 700px;">Monitor real-time student audio lab sessions, speech accuracy performance metrics, and learning platform activities seamlessly.</p>
+                    <h1 class="brand-font mb-2 fw-bold display-5">Welcome back, <?php echo htmlspecialchars($teacherName); ?>!</h1>
+                    <p class="mb-0 fw-medium" style="max-width: 640px; font-size:1.05rem;">Monitor real-time student audio lab sessions, speech accuracy performance metrics, and learning platform activities seamlessly.</p>
                 </div>
                 <div class="z-1">
-                    <button class="btn btn-gradient px-4 py-3 fw-bold shadow-lg d-flex align-items-center gap-2 fs-6" data-bs-toggle="modal" data-bs-target="#broadcastModal">
-                        <i class="fa-solid fa-bullhorn text-warning"></i> Send Announcement
+                    <button class="btn hero-cta px-4 py-3 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#broadcastModal">
+                        <i class="fa-solid fa-bullhorn"></i> Send Announcement
                     </button>
                 </div>
             </div>
@@ -539,57 +556,57 @@ try {
     </div>
 
     <!-- STATISTICS CARDS ROW -->
-    <div class="row g-4 mb-5">
-        <div class="col-sm-6 col-xl-3">
+    <div class="row g-3 g-md-4 mb-4">
+        <div class="col-6 col-xl-3">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted fs-6 mb-2 fw-bold text-uppercase tracking-wider" style="letter-spacing: 0.05em;">Total Students</p>
-                        <h2 class="brand-font text-dark mb-0 fw-extrabold display-5"><?php echo $totalStudents; ?></h2>
+                        <p class="text-muted stat-label mb-2 fw-bold text-uppercase">Total Students</p>
+                        <h2 class="brand-font text-dark mb-0 stat-value"><?php echo $totalStudents; ?></h2>
                     </div>
-                    <div class="stat-icon shadow-sm" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #2563eb;">
+                    <div class="stat-icon" style="background: var(--info-light); color: var(--info);">
                         <i class="fa-solid fa-user-group"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-6 col-xl-3">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted fs-6 mb-2 fw-bold text-uppercase tracking-wider" style="letter-spacing: 0.05em;">Active Today</p>
-                        <h2 class="brand-font text-dark mb-0 fw-extrabold display-5"><?php echo $activeSessionsToday; ?></h2>
+                        <p class="text-muted stat-label mb-2 fw-bold text-uppercase">Active Today</p>
+                        <h2 class="brand-font text-dark mb-0 stat-value"><?php echo $activeSessionsToday; ?></h2>
                     </div>
-                    <div class="stat-icon shadow-sm" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); color: #4f46e5;">
+                    <div class="stat-icon" style="background: var(--primary-light); color: var(--primary-hover);">
                         <i class="fa-solid fa-microphone-lines"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-6 col-xl-3">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted fs-6 mb-2 fw-bold text-uppercase tracking-wider" style="letter-spacing: 0.05em;">Avg. Accuracy</p>
-                        <h2 class="brand-font text-dark mb-0 fw-extrabold display-5"><?php echo $avgSpeechAccuracy; ?></h2>
+                        <p class="text-muted stat-label mb-2 fw-bold text-uppercase">Avg. Accuracy</p>
+                        <h2 class="brand-font text-dark mb-0 stat-value"><?php echo $avgSpeechAccuracy; ?></h2>
                     </div>
-                    <div class="stat-icon shadow-sm" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #d97706;">
+                    <div class="stat-icon" style="background: var(--warning-light); color: var(--warning);">
                         <i class="fa-solid fa-chart-line"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-6 col-xl-3">
             <div class="stat-card">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <p class="text-muted fs-6 mb-2 fw-bold text-uppercase tracking-wider" style="letter-spacing: 0.05em;">Pending Reviews</p>
-                        <h2 class="brand-font text-dark mb-0 fw-extrabold display-5"><?php echo $pendingReviews; ?></h2>
+                        <p class="text-muted stat-label mb-2 fw-bold text-uppercase">Pending Reviews</p>
+                        <h2 class="brand-font text-dark mb-0 stat-value"><?php echo $pendingReviews; ?></h2>
                     </div>
-                    <div class="stat-icon shadow-sm" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #dc2626;">
+                    <div class="stat-icon" style="background: var(--danger-light); color: var(--danger);">
                         <i class="fa-solid fa-circle-exclamation"></i>
                     </div>
                 </div>
@@ -598,50 +615,56 @@ try {
     </div>
 
     <!-- QUICK ACTIONS -->
-    <div class="row mb-5">
+    <div class="row mb-4">
         <div class="col-12 mb-3">
-            <h2 class="fw-extrabold text-dark brand-font fs-3">
-                <i class="fa-solid fa-bolt me-2 text-warning"></i>Quick Management Actions
+            <h2 class="fw-bold text-dark brand-font fs-4">
+                <i class="fa-solid fa-bolt me-2" style="color: var(--warning);"></i>Quick Management Actions
             </h2>
         </div>
-        <div class="col-md-4 mb-4">
+        <div class="col-6 col-md-4 mb-3 mb-md-0">
             <a href="students.php" class="quick-action-card">
-                <i class="fa-solid fa-users-gear display-6 mb-3 d-block text-primary"></i>
-                Manage Enrolled Students
+                <div class="qa-icon" style="background: var(--info-light); color: var(--info);">
+                    <i class="fa-solid fa-users-gear"></i>
+                </div>
+                Manage Students
             </a>
         </div>
-        <div class="col-md-4 mb-4">
+        <div class="col-6 col-md-4 mb-3 mb-md-0">
             <a href="speech_logs.php" class="quick-action-card">
-                <i class="fa-solid fa-headphones-simple display-6 mb-3 d-block text-success"></i>
-                Review Speech Audio Logs
+                <div class="qa-icon" style="background: var(--success-light); color: var(--success);">
+                    <i class="fa-solid fa-headphones-simple"></i>
+                </div>
+                Review Speech Logs
             </a>
         </div>
-        <div class="col-md-4 mb-4">
+        <div class="col-12 col-md-4">
             <a href="reports.php" class="quick-action-card" data-bs-toggle="modal" data-bs-target="#reportsModal">
-                <i class="fa-solid fa-file-arrow-down display-6 mb-3 d-block text-warning"></i>
-                Export Progress Reports
+                <div class="qa-icon" style="background: var(--warning-light); color: var(--warning);">
+                    <i class="fa-solid fa-file-arrow-down"></i>
+                </div>
+                Export Reports
             </a>
         </div>
     </div>
 
     <!-- RECENT STUDENT ACTIVITY TABLE WITH SEARCH & FILTER -->
     <div class="dashboard-section">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-4 mb-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
             <div>
-                <h2 class="fw-extrabold text-dark mb-1 brand-font fs-3">
-                    <i class="fa-solid fa-clock-rotate-left me-2 text-muted"></i>Real-Time Student Activity Feed
+                <h2 class="fw-bold text-dark mb-1 brand-font fs-4">
+                    <i class="fa-solid fa-clock-rotate-left me-2 text-muted"></i>Recent Student Activity
                 </h2>
-                <p class="text-muted mb-0 fs-6 fw-medium">Live tracking module interactions and student audio precision scores.</p>
+                <p class="text-muted mb-0" style="font-size:0.92rem;">Live tracking of module interactions and student audio precision scores.</p>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="d-flex flex-wrap align-items-center gap-2 gap-sm-3">
                 <!-- Filter Tabs -->
-                <div class="btn-group shadow-sm rounded-pill border p-1 bg-white" role="group">
-                    <button type="button" class="filter-pill active border-0" onclick="filterTable('all', this)">All</button>
-                    <button type="button" class="filter-pill border-0" onclick="filterTable('Completed', this)">Completed</button>
-                    <button type="button" class="filter-pill border-0" onclick="filterTable('Needs Review', this)">Needs Review</button>
+                <div class="btn-group border rounded-pill p-1 bg-white" role="group">
+                    <button type="button" class="filter-pill active" onclick="filterTable('all', this)">All</button>
+                    <button type="button" class="filter-pill" onclick="filterTable('Completed', this)">Completed</button>
+                    <button type="button" class="filter-pill" onclick="filterTable('Needs Review', this)">Needs Review</button>
                 </div>
                 <!-- Search Box -->
-                <div class="input-group shadow-sm" style="width: 260px;">
+                <div class="input-group" style="max-width: 260px;">
                     <span class="input-group-text bg-white border-end-0 search-box rounded-start-pill ps-3"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
                     <input type="text" id="activitySearch" class="form-control border-start-0 search-box rounded-end-pill shadow-none ps-0 fw-semibold" placeholder="Search student...">
                 </div>
@@ -662,8 +685,8 @@ try {
                 <tbody>
                     <?php if (empty($recentStudents)): ?>
                         <tr>
-                            <td colspan="5" class="text-center py-5 text-muted fw-bold fs-6">
-                                <i class="fa-solid fa-circle-info me-2 text-teal" style="color: var(--primary-color);"></i> No live student activity recorded in the database yet.
+                            <td colspan="5" class="text-center py-5 text-muted fw-bold">
+                                <i class="fa-solid fa-circle-info me-2" style="color: var(--primary-color);"></i> No live student activity recorded in the database yet.
                             </td>
                         </tr>
                     <?php else: ?>
@@ -672,7 +695,7 @@ try {
                                 <td>
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="position-relative">
-                                            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 44px; height: 44px; font-size: 1rem; background: var(--primary-light); color: var(--primary-hover);">
+                                            <div class="avatar-circle rounded-circle d-flex align-items-center justify-content-center fw-bold">
                                                 <?php echo strtoupper(substr($student['name'], 0, 1)); ?>
                                             </div>
                                             <?php if (!empty($student['is_online'])): ?>
@@ -680,30 +703,30 @@ try {
                                             <?php endif; ?>
                                         </div>
                                         <div>
-                                            <span class="fw-bold text-dark fs-6 d-block"><?php echo htmlspecialchars($student['name']); ?></span>
+                                            <span class="fw-bold text-dark d-block"><?php echo htmlspecialchars($student['name']); ?></span>
                                             <?php if (!empty($student['is_online'])): ?>
-                                                <small class="text-success fw-bold" style="font-size: 0.75rem;"><i class="fa-solid fa-circle" style="font-size: 5px;"></i> Active Now</small>
+                                                <small class="text-success fw-bold" style="font-size: 0.72rem;"><i class="fa-solid fa-circle" style="font-size: 5px;"></i> Active Now</small>
                                             <?php endif; ?>
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="text-dark fw-bold fs-6"><?php echo htmlspecialchars($student['module']); ?></span></td>
+                                <td><span class="text-dark fw-bold"><?php echo htmlspecialchars($student['module']); ?></span></td>
                                 <td>
-                                    <div class="d-flex align-items-center gap-3">
-                                        <div class="progress flex-grow-1 bg-light border" style="height: 10px; width: 100px;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1 bg-light border" style="height: 8px; width: 90px;">
                                             <div class="progress-bar rounded-pill" role="progressbar" style="width: <?php echo $student['accuracy']; ?>%;"></div>
                                         </div>
-                                        <span class="fw-bold text-dark fs-6"><?php echo $student['accuracy']; ?>%</span>
+                                        <span class="fw-bold text-dark"><?php echo $student['accuracy']; ?>%</span>
                                     </div>
                                 </td>
-                                <td class="fw-semibold text-secondary fs-6"><?php echo htmlspecialchars($student['time']); ?></td>
+                                <td class="fw-semibold text-secondary"><?php echo htmlspecialchars($student['time']); ?></td>
                                 <td>
                                     <?php if ($student['status'] === 'Excellent' || $student['status'] === 'Completed'): ?>
-                                        <span class="badge bg-success bg-opacity-10 text-success fw-bold px-3 py-2 rounded-pill fs-6">Completed</span>
+                                        <span class="badge badge-soft-success fw-bold px-3 py-2 rounded-pill">Completed</span>
                                     <?php elseif ($student['status'] === 'Good'): ?>
-                                        <span class="badge bg-info bg-opacity-10 text-info fw-bold px-3 py-2 rounded-pill fs-6">Good</span>
+                                        <span class="badge badge-soft-info fw-bold px-3 py-2 rounded-pill">Good</span>
                                     <?php else: ?>
-                                        <span class="badge bg-warning bg-opacity-10 text-warning fw-bold px-3 py-2 rounded-pill fs-6">Needs Review</span>
+                                        <span class="badge badge-soft-warning fw-bold px-3 py-2 rounded-pill">Needs Review</span>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -720,29 +743,29 @@ try {
 <!-- 1. Reports & Export Modal -->
 <div class="modal fade" id="reportsModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content shadow-lg p-3">
+        <div class="modal-content shadow p-3">
             <div class="modal-header border-bottom px-3 py-3">
-                <h4 class="modal-title brand-font fw-bold text-dark"><i class="fa-solid fa-file-arrow-down me-2 text-warning"></i> Export Progress Report</h4>
+                <h4 class="modal-title brand-font fw-bold text-dark"><i class="fa-solid fa-file-arrow-down me-2" style="color: var(--warning);"></i> Export Progress Report</h4>
                 <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
                 <form action="reports.php" method="GET">
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark text-uppercase fs-6">Report Format</label>
+                        <label class="form-label fw-bold text-dark text-uppercase" style="font-size:0.8rem;">Report Format</label>
                         <select name="format" class="form-select rounded-3 border fw-semibold py-2">
                             <option value="csv">CSV Spreadsheet</option>
                             <option value="pdf">PDF Document Summary</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark text-uppercase fs-6">Date Range</label>
+                        <label class="form-label fw-bold text-dark text-uppercase" style="font-size:0.8rem;">Date Range</label>
                         <select name="range" class="form-select rounded-3 border fw-semibold py-2">
                             <option value="today">Today</option>
                             <option value="week" selected>Past 7 Days</option>
                             <option value="month">Past 30 Days</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-gradient w-100 rounded-pill py-3 mt-3 fw-bold shadow-sm"><i class="fa-solid fa-download me-2"></i>Download Report</button>
+                    <button type="submit" class="btn btn-gradient w-100 rounded-pill py-3 mt-3 fw-bold"><i class="fa-solid fa-download me-2"></i>Download Report</button>
                 </form>
             </div>
         </div>
@@ -752,22 +775,22 @@ try {
 <!-- 2. Announcement Modal -->
 <div class="modal fade" id="broadcastModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content shadow-lg p-3">
+        <div class="modal-content shadow p-3">
             <div class="modal-header border-bottom px-3 py-3">
-                <h4 class="modal-title brand-font fw-bold text-dark"><i class="fa-solid fa-bullhorn me-2 text-warning"></i> Broadcast Announcement</h4>
+                <h4 class="modal-title brand-font fw-bold text-dark"><i class="fa-solid fa-bullhorn me-2" style="color: var(--warning);"></i> Broadcast Announcement</h4>
                 <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
                 <form action="broadcast.php" method="POST">
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark text-uppercase fs-6">Message Title</label>
+                        <label class="form-label fw-bold text-dark text-uppercase" style="font-size:0.8rem;">Message Title</label>
                         <input type="text" name="title" class="form-control rounded-3 border fw-semibold py-2" placeholder="e.g. Weekly Speech Challenge" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold text-dark text-uppercase fs-6">Announcement Details</label>
+                        <label class="form-label fw-bold text-dark text-uppercase" style="font-size:0.8rem;">Announcement Details</label>
                         <textarea name="message" class="form-control rounded-3 border fw-medium" rows="4" placeholder="Write your message to all enrolled students here..." required></textarea>
                     </div>
-                    <button type="submit" class="btn btn-gradient w-100 rounded-pill py-3 fw-bold shadow-sm">Send to All Students</button>
+                    <button type="submit" class="btn btn-gradient w-100 rounded-pill py-3 fw-bold">Send to All Students</button>
                 </form>
             </div>
         </div>
